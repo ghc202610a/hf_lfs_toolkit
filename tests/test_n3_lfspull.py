@@ -61,9 +61,9 @@ class LfsPullTests(unittest.TestCase):
                 return self.git_root_result()
             calls.append(command)
             if len(calls) == 1:
-                return subprocess.CompletedProcess(command, 1, "", "temporary network error")
+                return subprocess.CompletedProcess(command, 1, b"", b"temporary network error")
             (self.root / self.entry["path"]).write_bytes(self.payload)
-            return subprocess.CompletedProcess(command, 0, "downloaded\n", "")
+            return subprocess.CompletedProcess(command, 0, b"downloaded\n", b"")
 
         with mock.patch.object(lfspull.subprocess, "run", side_effect=run), \
              mock.patch.object(lfspull.shutil, "disk_usage",
@@ -117,7 +117,7 @@ class LfsPullTests(unittest.TestCase):
             if command[:3] == ["git", "rev-parse", "--show-toplevel"]:
                 return self.git_root_result()
             calls.append(command)
-            return subprocess.CompletedProcess(command, 1, "", "offline")
+            return subprocess.CompletedProcess(command, 1, b"", b"offline")
 
         with mock.patch.object(lfspull.subprocess, "run", side_effect=run), \
              mock.patch.object(lfspull.shutil, "disk_usage",
