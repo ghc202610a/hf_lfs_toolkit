@@ -17,8 +17,10 @@ class LfsCacheTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.cache = self.base / "objects"
         self.cache.mkdir()
+        self.objects = self.cache / "objects"
+        self.objects.mkdir()
         self.oid = "a" * 64
-        self.object_path = self.cache / self.oid[:2] / self.oid[2:4] / self.oid
+        self.object_path = self.objects / self.oid[:2] / self.oid[2:4] / self.oid[4:]
         self.object_path.parent.mkdir(parents=True)
         self.object_path.write_bytes(b"payload")
         self.inventory = self.base / "inventory.json"
@@ -36,7 +38,7 @@ class LfsCacheTests(unittest.TestCase):
         objects, links, unreadable = lfscache.scan_cache(self.cache)
         self.assertEqual([item["oid"] for item in objects], [self.oid])
         self.assertEqual((links, unreadable), (0, 0))
-        junk = self.cache / "not-an-object"
+        junk = self.objects / "not-an-object"
         junk.write_text("ignored")
         objects, _, _ = lfscache.scan_cache(self.cache)
         self.assertEqual(len(objects), 1)
@@ -45,18 +47,18 @@ class LfsCacheTests(unittest.TestCase):
         outside = self.base / "outside"
         outside.mkdir()
         (outside / ("b" * 64)).write_bytes(b"external")
-        (self.cache / "link").symlink_to(outside, target_is_directory=True)
+        (self.objects / "link").symlink_to(outside, target_is_directory=True)
         objects, links, _ = lfscache.scan_cache(self.cache)
         self.assertEqual(len(objects), 1)
         self.assertEqual(links, 1)
 
     def test_object_oid_requires_canonical_two_two_sixty_layout(self):
         self.assertEqual(
-            lfscache.object_oid(Path(self.oid[:2]) / self.oid[2:4] / self.oid),
+            lfscache.object_oid(Path(self.oid[:2]) / self.oid[2:4] / self.oid[4:]),
             self.oid,
         )
         self.assertIsNone(lfscache.object_oid(Path(self.oid)))
-        self.assertIsNone(lfscache.object_oid(Path("zz") / self.oid[2:4] / self.oid))
+        self.assertIsNone(lfscache.object_oid(Path("zz") / self.oid[2:4] / self.oid[4:]))
 
     def test_conflicting_inventory_sizes_rejected(self):
         self.inventory.write_text(json.dumps({
