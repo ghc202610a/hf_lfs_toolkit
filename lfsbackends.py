@@ -94,6 +94,8 @@ class HuggingFaceHubBackend(AcquisitionBackend):
             or parsed.query
             or parsed.fragment
             or parsed.params
+            or "?" in repository
+            or "#" in repository
         ):
             raise ValueError("Hub backend requires a canonical HTTPS huggingface.co model URL")
 
