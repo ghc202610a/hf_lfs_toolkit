@@ -7,7 +7,7 @@ The toolkit is organized around separate stages:
 1. **Snapshot** — clone a repository with Git LFS smudging disabled and capture the Git commit plus LFS metadata.
 2. **Acquisition** — materialize selected LFS paths using Git LFS.
 3. **Verification** — compare materialized bytes with the captured SHA-256 OID and expected size using HashSuite.
-4. **Cache management** — optionally remove local LFS cache objects only after successful verification.
+4. **Cache management** — inspect the local LFS object cache; any optional removal remains a separate, conservative operation.
 
 A successful stage must not be treated as proof that a later stage succeeded. In particular, a completed pull is not equivalent to a verified file.
 
