@@ -122,7 +122,7 @@ def main():
     parser.add_argument("--reserve-gib", type=float, default=1.0,
                         help="free-space reserve retained after estimated downloads")
     parser.add_argument("--no-space-check", action="store_true",
-                        help="skip the conservative free-space preflight")
+                        help="skip the worktree free-space preflight")
     parser.add_argument("--force", action="store_true",
                         help="run git lfs pull even when the path already has expected size")
     parser.add_argument("--log", help="JSON Lines run log (default: local.lfspull.TIMESTAMP.jsonl)")
