@@ -5,7 +5,7 @@
 - `hf-lfs-snapshot.py` — clones a Hugging Face Git repository with LFS smudging disabled, captures raw and normalized LFS inventories, and emits helper scripts.
 - `verify-lfs.py` — validates inventory entries and working-tree paths, invokes external HashSuite `hashcheck.py`, checks file size/stability, and optionally prunes verified LFS cache objects.
 - `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.
-- `tests/test_n1_regression.py` — current focused regression tests.
+- `tests/test_n1_regression.py` — deterministic regression tests for snapshot capture outputs and verifier safety behavior.
 - `UPSTREAM-REVISIONS.txt` — pinned source revisions used as upstream references for the toolkit and HashSuite.
 
 ## Runtime dependencies
@@ -23,7 +23,15 @@ python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py
 python3 -m unittest discover -s tests -v
 ```
 
-The current unit tests are deliberately small. They exercise duplicate-path rejection in the snapshot JSON parser and rejection of a symlink in a verifier inventory path. They do not perform a live clone, LFS download, real HashSuite hashing, archive round-trip, or cache-pruning integration test.
+The regression suite exercises:
+
+- valid and malformed Git LFS JSON, duplicate paths, traversal paths, invalid OIDs, and invalid sizes;
+- snapshot output generation, generated shell quoting for spaces/quotes/metacharacters, executable helper modes, archive default behavior, and `--no-archive`;
+- normalized inventory validation and checksum-manifest filename escaping;
+- symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;
+- verifier success/failure outcomes using a controlled HashSuite subprocess stub, including all-or-none pruning and preservation of `.git/lfs/incomplete`.
+
+These tests mock Git clone/list operations and the HashSuite process. They do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
 
 When changing verifier behavior, use a temporary Git worktree and a controlled HashSuite fixture or the pinned HashSuite checkout. Test both successful and failing checksum cases, size mismatch, missing/non-regular paths, symlinks in intermediate components, file mutation during hashing, subprocess error handling, and the all-or-none prune rule.
 
