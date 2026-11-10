@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import json
 import os
@@ -11,7 +12,7 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 LFS_VERSION = "https://git-lfs.github.com/spec/v1"
-OID = "a" * 64
+OID = hashlib.sha256(b"data").hexdigest()
 
 
 def load(name, filename):
@@ -104,7 +105,7 @@ class N1RegressionTests(unittest.TestCase):
 
             pull = (out / "capture" / "local.lfspull.sh").read_text()
             clone = (out / "capture" / "_clone.sh").read_text()
-            self.assertIn("git lfs pull --include='dir/it'\\''s a file; $(not-a-command).bin'", pull)
+            self.assertIn("git lfs pull --include=" + __import__("shlex").quote(odd_path), pull)
             self.assertIn("COMMIT='0123456789abcdef'", clone)
             self.assertTrue(os.access(out / "capture" / "_clone.sh", os.X_OK))
             self.assertTrue(os.access(out / "capture" / "local.lfspull.sh", os.X_OK))
