@@ -10,6 +10,7 @@ import importlib.util
 import os
 import re
 import shutil
+import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -123,6 +124,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
 
             target = context.root.joinpath(*Path(entry["path"]).parts)
             target.parent.mkdir(parents=True, exist_ok=True)
+            existing_mode = stat.S_IMODE(target.stat().st_mode) if target.exists() else 0o644
             fd, temp_name = tempfile.mkstemp(prefix="." + target.name + ".hfhub-", dir=str(target.parent))
             try:
                 with os.fdopen(fd, "wb") as output, cached.open("rb") as source:
@@ -132,6 +134,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
                 staged = Path(temp_name)
                 if staged.stat().st_size != entry["size"]:
                     raise OSError("staged file size changed during cache copy")
+                os.chmod(staged, existing_mode)
                 os.replace(staged, target)
             except BaseException:
                 try:
