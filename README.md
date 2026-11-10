@@ -245,4 +245,4 @@ Run the toolkit's current regression tests from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-The regression suite includes snapshot/verifier safety tests and local-state classification tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
+The regression suite includes snapshot/verifier safety tests, local-state classification tests, acquisition-runner tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
