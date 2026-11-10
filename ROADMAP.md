@@ -2,7 +2,7 @@
 
 This is a planning document. Items below are proposed follow-on work, not statements about functionality currently present in `main`.
 
-## Current baseline (N+1)
+## Current baseline (N+4)
 
 - Capture pointer-only Hugging Face Git working tree.
 - Preserve raw Git LFS JSON and a normalized `hf-lfs-inventory-v1` inventory.
