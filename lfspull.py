@@ -78,7 +78,7 @@ def path_status(root, rel, expected_size):
                 header = stream.read(128)
         except OSError as exc:
             return "UNKNOWN", str(exc)
-        if header.startswith(b"version https://git-lfs.github.com/spec/v1\\n"):
+        if header.startswith(b"version https://git-lfs.github.com/spec/v1\n"):
             return "POINTER", None
         return "SIZE_OK", None
     if st.st_size < expected_size:
