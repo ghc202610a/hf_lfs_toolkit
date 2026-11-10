@@ -101,7 +101,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
 
         # Encoded separators and repeated/extra path components make URL-to-repo
         # interpretation ambiguous. The Hub API receives a plain ORG/MODEL ID.
-        match = re.fullmatch(r"/([\\w.-]+)/([\\w.-]+)/?", parsed.path)
+        match = re.fullmatch(r"/([\w.-]+)/([\w.-]+)/?", parsed.path)
         if not match:
             raise ValueError("Hub backend supports model repository URLs in ORG/MODEL form")
         parts = match.groups()
