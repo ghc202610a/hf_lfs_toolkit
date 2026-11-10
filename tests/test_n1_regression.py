@@ -106,7 +106,7 @@ class N1RegressionTests(unittest.TestCase):
             pull = (out / "capture" / "local.lfspull.sh").read_text()
             clone = (out / "capture" / "_clone.sh").read_text()
             self.assertIn("git lfs pull --include=" + __import__("shlex").quote(odd_path), pull)
-            self.assertIn("COMMIT='0123456789abcdef'", clone)
+            self.assertIn("COMMIT=0123456789abcdef", clone)
             self.assertTrue(os.access(out / "capture" / "_clone.sh", os.X_OK))
             self.assertTrue(os.access(out / "capture" / "local.lfspull.sh", os.X_OK))
             self.assertFalse((out / "capture.tar.gz").exists())
