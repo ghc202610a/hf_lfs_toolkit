@@ -5,9 +5,11 @@
 - `hf-lfs-snapshot.py` — clones a Hugging Face Git repository with LFS smudging disabled, captures raw and normalized LFS inventories, and emits helper scripts.
 - `verify-lfs.py` — validates inventory entries and working-tree paths, invokes external HashSuite `hashcheck.py`, checks file size/stability, and optionally prunes verified LFS cache objects.
 - `lfsls.py` — reports live pointer/materialization state and maintains `local.lfsstate.json` separately from the captured inventory.
-- `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.\n- `lfspull.py` — inventory-driven serial acquisition runner with disk-space preflight, bounded retries, and JSON Lines run logging.
+- `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.
+- `lfspull.py` — inventory-driven serial acquisition runner with disk-space preflight, bounded retries, and JSON Lines run logging.
 - `tests/test_n1_regression.py` — deterministic regression tests for snapshot capture outputs and verifier safety behavior.
-- `tests/test_n2_lfs_state.py` — deterministic local-state classification and cache-invalidation tests.\n- `tests/test_n3_lfspull.py` — deterministic acquisition-runner tests using mocked Git commands.
+- `tests/test_n2_lfs_state.py` — deterministic local-state classification and cache-invalidation tests.
+- `tests/test_n3_lfspull.py` — deterministic acquisition-runner tests using mocked Git commands.
 - `UPSTREAM-REVISIONS.txt` — pinned source revisions used as upstream references for the toolkit and HashSuite.
 
 ## Runtime dependencies
@@ -30,7 +32,8 @@ The regression suite exercises:
 - valid and malformed Git LFS JSON, duplicate paths, traversal paths, invalid OIDs, and invalid sizes;
 - snapshot output generation, generated shell quoting for spaces/quotes/metacharacters, executable helper modes, archive default behavior, and `--no-archive`;
 - normalized inventory validation and checksum-manifest filename escaping;
-- symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;\n- LFS pull retry behavior, disk-space preflight, size-correct skip behavior, JSONL logging, and symlink-path rejection;
+- symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;
+- LFS pull retry behavior, disk-space preflight, size-correct skip behavior, JSONL logging, and symlink-path rejection;
 - verifier success/failure outcomes using a controlled HashSuite subprocess stub, including all-or-none pruning and preservation of `.git/lfs/incomplete`.
 
 These tests mock Git clone/list operations and the HashSuite process. The N+2 state tests use temporary filesystems and do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
