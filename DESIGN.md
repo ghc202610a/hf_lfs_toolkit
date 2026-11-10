@@ -58,6 +58,14 @@ The expected manifest is built from the complete inventory, while the computed m
 
 Pruning is deliberately conservative: if any selected path fails either checksum or size/stability validation, no selected cache objects are removed. Only corresponding objects in the Git LFS object cache are eligible. Incomplete-download storage is outside the pruning target.
 
+## Read-only cache inventory
+
+`lfscache.py` discovers the configured Git LFS `LocalMediaDir` through `git lfs env` (or accepts an explicit cache directory) and scans only the canonical SHA-256 object layout under that directory's `objects` subtree. An object is recognized only when its relative path is exactly `aa/bb/<64-character-oid>`. Symlinks are not followed. Non-canonical files are ignored.
+
+The report correlates cached OIDs with one captured inventory and reports matching objects, missing inventory objects, cached-size mismatches, and objects not referenced by that inventory. The latter category must not be called orphaned: Git LFS media storage may be shared across repositories, worktrees, and snapshots, and a single inventory cannot establish global reachability.
+
+N+4 deliberately adds inspection only. The reporter is read-only, does not enter `.git/lfs/incomplete`, and does not delete, move, rewrite, or repair cache objects. Any future cleanup feature needs a separate design for global reachability, concurrent Git LFS processes, dry-run review, and explicit destructive authorization.
+
 ## Mutable local state
 
 `lfs-inventory.json` remains the immutable expected snapshot. `local.lfsstate.json` is a separate mutable observation document with format identifier `hf-lfs-state-v1`. It is stored beside the inventory by default and includes:
