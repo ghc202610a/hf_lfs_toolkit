@@ -1,87 +1,173 @@
 # Hugging Face Git LFS snapshot and verification toolkit
 
-This toolkit captures the Git LFS object inventory before materialization, pulls selected files, verifies the materialized bytes against the captured LFS SHA-256 OIDs and sizes, and writes ordinary SHA-256 and SHA-512 checksum manifests.
+This repository contains small command-line tools for capturing the Git LFS inventory of a Hugging Face repository, materializing selected LFS files, and checking the resulting working-tree files against the captured LFS SHA-256 object IDs and byte sizes.
+
+The snapshot records the Git commit and preserves both the raw `git lfs ls-files --json` response and a normalized inventory. Verification uses the separate [HashSuite](https://github.com/ghc202610a/hashsuite) project as its hashing engine; this repository does not contain a second hash implementation.
 
 ## Requirements
 
-- Python 3.9 or newer (standard library only)
+- Python 3.9 or newer
 - Git
-- Git LFS (`git-lfs`)
-- Network access to the Hugging Face repository
+- Git LFS (`git-lfs`) with support for `git lfs ls-files --json`
+- Network access and any required credentials for the Hugging Face repository
+- HashSuite `hashcheck.py` for verification (not required just to capture a snapshot)
 
-No third-party Python packages are required. `hashcore.py` is included and computes SHA-256 and SHA-512 together in one streaming pass (8 MiB blocks by default).
+The Python tools use only the Python standard library. HashSuite is a separate dependency and must be obtained and maintained separately.
 
-## 1. Capture the pointer-only snapshot
+## 1. Capture a pointer-only snapshot
 
-From a directory where you want the snapshot created:
-
-```sh
-./hf-lfs-snapshot.py https://huggingface.co/ORG/MODEL --archive
-```
-
-The command clones with `GIT_LFS_SKIP_SMUDGE=1`, so LFS pointer files remain in the working tree. It records:
-
-- `lfs-inventory.json`: durable per-path LFS SHA-256 OID and byte size, plus repository and commit metadata
-- `lfs-listing.raw.txt`: original `git lfs ls-files --long --size` output
-- `clone/`: pointer-only Git working tree
-
-The inventory is captured before any pull. Preserve it independently if you later discard the clone or `.git` directory.
-
-## 2. Pull selected files
-
-Change into the snapshot's clone directory and pull paths one at a time:
+Run `hf-lfs-snapshot.py` from this repository or use its full path:
 
 ```sh
-cd hf_MODEL_TIMESTAMP/clone
-../lfspull.sh path/to/file1 path/to/file2
+./hf-lfs-snapshot.py https://huggingface.co/ORG/MODEL
 ```
 
-`lfspull.sh` uses `git lfs pull --include=... --exclude=''` for each path. Paths containing shell whitespace should be quoted. Avoid broad include patterns unless you intend to materialize all matching files.
-
-## 3. Verify and create independent manifests
-
-Run from anywhere inside the clone working tree:
+Optional destination controls:
 
 ```sh
-../verify-lfs.py --inventory ../lfs-inventory.json
+./hf-lfs-snapshot.py https://huggingface.co/ORG/MODEL \
+  --out /data/model-snapshots --name model-capture-01
 ```
 
-By default it verifies every inventory entry. It checks file existence, exact byte size, and SHA-256 against the captured LFS OID. For each successful file it also records SHA-256 and SHA-512 in the conventional two-space checksum format:
+The command clones with `GIT_LFS_SKIP_SMUDGE=1`, leaving LFS pointer files in the working tree while it records the inventory. The output is a new directory (default name `hf_MODEL_YYYYMMDD_HHMMSS`) containing:
 
-- `SHA256SUMS`
-- `SHA512SUMS`
+| Path | Purpose |
+|---|---|
+| `clone/` | Pointer-only Git working tree at the captured checkout |
+| `local.lfsfiles.json` | Raw output from `git lfs ls-files --json` |
+| `local.lfsfiles.txt` | Human-readable `git lfs ls-files --long --size` listing |
+| `lfs-inventory.json` | Normalized `hf-lfs-inventory-v1` inventory, including repository URL, capture time, Git commit, LFS paths, SHA-256 OIDs and sizes |
+| `_clone.sh` | Re-clones the repository and checks out the captured commit; refuses to overwrite an existing destination |
+| `local.lfspull.sh` | Pulls the captured LFS paths one at a time from the sibling `clone/` directory |
 
-Both digests are calculated during the same streaming read of each file. The ordinary manifests are independent of Git LFS and can subsequently be checked with standard tools such as `sha256sum -c SHA256SUMS` and `sha512sum -c SHA512SUMS` from the same working directory.
+A compressed `.tar.gz` archive of the snapshot directory is created by default beside the directory. Use `--no-archive` to suppress that archive. The option is an opt-out; there is no `--archive` flag.
 
-To verify only selected inventory paths:
+The inventory is captured before any LFS pull. Preserve `lfs-inventory.json` and the raw listing independently if you later remove the clone or its `.git` directory.
+
+## 2. Materialize LFS files
+
+To pull every path in the captured inventory, run the generated helper from the snapshot directory:
 
 ```sh
-../verify-lfs.py --inventory ../lfs-inventory.json path/to/file1 path/to/file2
+cd /path/to/snapshot
+./local.lfspull.sh
 ```
 
-To choose manifest destinations:
+The helper changes into `clone/` and invokes `git lfs pull --include=...` once per captured path. This can take time and disk space for large repositories.
+
+To pull only selected paths, use this repository's `lfspull.sh` while the current directory is the clone working tree:
 
 ```sh
-../verify-lfs.py --inventory ../lfs-inventory.json \
-  --sha256-out model.sha256 --sha512-out model.sha512
+cd /path/to/snapshot/clone
+/path/to/hf_lfs_toolkit/lfspull.sh \
+  'path/to/file one.safetensors' path/to/another-file.bin
 ```
 
-A failed file is excluded from the generated manifests and causes a nonzero exit status. A successful subset may still produce manifests, so inspect the final result line and exit status.
+Each path is passed as a separately quoted include value. Avoid broad patterns unless you intend to materialize all matching files. Git LFS authentication and remote access are handled by Git/Git LFS, not by this toolkit.
 
-## Optional LFS cache pruning
-
-`--prune` removes the corresponding local `.git/lfs/objects/...` cache object only after the materialized working-tree file passes both size and SHA-256 checks:
+The generated `_clone.sh` can recreate the pointer-only checkout at the captured commit:
 
 ```sh
-../verify-lfs.py --inventory ../lfs-inventory.json --prune
+cd /path/to/snapshot
+./_clone.sh [new-clone-directory]
 ```
 
-This is optional. It does not remove the materialized working-tree file or the captured inventory. Do not use it if you want to retain the local LFS object cache.
+It refuses to use a destination that already exists. The script does not embed credentials or preserve arbitrary local Git configuration.
 
-## Notes and limitations
+## 3. Verify materialized files
 
-- The captured LFS SHA-256 OID is the authority for initial verification. The pointer stub itself is not needed after the inventory has been captured.
-- The inventory describes the selected Git commit at snapshot time. If the working tree is changed to another commit, the inventory may no longer describe its LFS files.
-- The verifier expects to run inside the matching Git working tree so it can resolve the repository root. It can still write independent manifests before the `.git` directory is discarded.
-- The snapshot parser expects the four-field `git lfs ls-files --long --size` format: full 64-hex OID, status marker, byte size, and path. The path is retained as the remainder of the line, including embedded spaces.
-- No live Hugging Face network clone was performed as part of local packaging tests. Test the first snapshot against the intended repository and retain the inventory before pulling.
+Verification is performed from inside the matching Git working tree because the verifier resolves the worktree root using Git:
+
+```sh
+cd /path/to/snapshot/clone
+/path/to/hf_lfs_toolkit/verify-lfs.py --inventory ../lfs-inventory.json
+```
+
+By default, all inventory entries are selected. Specific paths may be supplied as positional arguments:
+
+```sh
+/path/to/hf_lfs_toolkit/verify-lfs.py \
+  --inventory ../lfs-inventory.json \
+  'path/to/file one.safetensors' path/to/another-file.bin
+```
+
+The verifier checks that selected paths are regular files, rejects symlinks in any path component, checks exact byte sizes, and asks HashSuite to verify SHA-256 against the captured LFS OIDs. It also compares file signatures before and after hashing to detect files that changed while being read.
+
+### HashSuite discovery
+
+The verifier searches for HashSuite `hashcheck.py` in this order:
+
+1. `--hashcheck /path/to/hashcheck.py`
+2. `HASHSUITE_HASHCHECK` environment variable
+3. `HASHSUITE_DIR` environment variable (the directory containing `hashcheck.py`)
+4. `hashcheck.py` on `PATH`
+
+For example:
+
+```sh
+export HASHSUITE_DIR="$HOME/src/hashsuite"
+/path/to/hf_lfs_toolkit/verify-lfs.py --inventory ../lfs-inventory.json
+```
+
+Or pass the script directly:
+
+```sh
+/path/to/hf_lfs_toolkit/verify-lfs.py \
+  --hashcheck "$HOME/src/hashsuite/hashcheck.py" \
+  --inventory ../lfs-inventory.json
+```
+
+The expected HashSuite revision used when this toolkit revision was assembled is recorded in `UPSTREAM-REVISIONS.txt`. HashSuite is not vendored here.
+
+### Per-run outputs
+
+Each verifier run generates a run identifier by default (UTC timestamp plus Unix time). Output files are written in the current working directory:
+
+- `local.sha256sums.check.RUNID.txt` — authoritative SHA-256 manifest derived from the complete captured inventory
+- `local.sha256sums.RUNID.txt` — computed SHA-256 manifest from HashSuite
+- `local.sha256sums.sha512.RUNID.txt` — computed SHA-512 manifest from HashSuite
+- `local.hashcheck.RUNID.log` — combined HashSuite stdout and stderr
+
+The authoritative manifest represents the full inventory even when only a subset of paths is selected for verification. HashSuite's computed manifests represent the selected paths processed in that run. These files are separate per run rather than cumulative fixed-name manifests. `--run-id` can be used to supply a chosen identifier; it must contain only letters, digits, underscore, dot, or hyphen.
+
+Useful options:
+
+- `--jobs N` — HashSuite worker count (default: up to 8, bounded by available CPUs)
+- `--chunk-mib N` — HashSuite read chunk size in MiB (default: 8)
+- `--no-advice` — pass the corresponding option to HashSuite
+- `--manifest-out PATH` — choose the authoritative expected manifest path
+- `--sha256-out PATH` — choose the computed SHA-256 output path
+- `--sha512-out PATH` — choose the computed SHA-512 output path
+- `--log-out PATH` — choose the combined HashSuite log path
+- `--run-id ID` — choose the run identifier used in default output names
+
+A failed verification returns a nonzero status. A subset of successful files may still appear in computed manifests; inspect the final `LFS result` line and the process exit status before treating the run as successful.
+
+## 4. Optional LFS cache pruning
+
+`--prune` removes corresponding local Git LFS cache objects only when every selected file passes the complete SHA-256 and size/stability checks:
+
+```sh
+/path/to/hf_lfs_toolkit/verify-lfs.py \
+  --inventory ../lfs-inventory.json --prune
+```
+
+Pruning affects objects under the Git directory's `lfs/objects` hierarchy. It does not remove the materialized working-tree files or the captured inventory. If any selected file fails, pruning is skipped for the entire selected batch. Use this option only when you intentionally want to discard the verified local LFS cache objects.
+
+## Inventory format and limitations
+
+The normalized inventory format identifier is `hf-lfs-inventory-v1`. Each entry records a relative path, SHA-256 OID, byte size, OID type, and Git LFS pointer version. The snapshot parser validates JSON structure, duplicate paths, path traversal, OID format, size type, and pointer version.
+
+The inventory describes the captured Git commit. If the working tree is checked out to another commit or its tracked files are changed, the inventory may no longer describe the files present. Verification checks the inventory paths against the current worktree; it does not establish that the remote repository still has the same branch tip.
+
+The snapshot tool does not perform a live Hugging Face network operation as part of its local unit tests. Test a real snapshot against the intended repository and retain the inventory before materializing files.
+
+## Tests
+
+Run the toolkit's current regression tests from the repository root:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+The present regression file covers duplicate LFS path rejection and symlink-component rejection. This is a small regression set, not comprehensive integration coverage of remote cloning, downloads, HashSuite, or cache pruning. See [DEVELOPMENT.md](DEVELOPMENT.md) for development notes and current test scope.
