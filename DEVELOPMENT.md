@@ -52,7 +52,7 @@ The JSON Lines log is appended and flushed after each event. It records run boun
 
 ## LFS cache inventory
 
-`lfscache.py` reads the `LocalMediaDir` reported by `git lfs env` unless `--cache-dir` is supplied. It scans only the `objects` directory and recognizes the canonical two-character/two-character/60-character SHA-256 object path. It reports correlation with one inventory but cannot establish global reachability across other repositories sharing the cache. The command is read-only and does not inspect `.git/lfs/incomplete`.
+`lfscache.py` reads the `LocalMediaDir` reported by `git lfs env` unless `--cache-dir` is supplied. It scans only the `objects` subdirectory of the media directory and recognizes the canonical two-character/two-character/60-character SHA-256 object path. A symlink in place of the `objects` directory is rejected. It reports correlation with one inventory but cannot establish global reachability across other repositories sharing the cache. The command is read-only and does not inspect `.git/lfs/incomplete`.
 
 ## HashSuite integration contract
 
