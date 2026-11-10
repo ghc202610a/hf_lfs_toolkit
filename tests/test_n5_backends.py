@@ -66,6 +66,17 @@ class HubBackendTests(unittest.TestCase):
         self.assertEqual(self.cached_file.read_bytes(), self.payload)
         self.assertFalse(list((self.root / "weights").glob(".model.bin.hfhub-*")))
 
+    def test_replacement_preserves_existing_file_mode(self):
+        target = self.root / self.entry["path"]
+        target.write_bytes(b"old")
+        target.chmod(0o640)
+
+        with self.install_fake_hub(lambda **kwargs: str(self.cached_file)):
+            result = backends.HuggingFaceHubBackend().acquire(self.entry, self.context)
+
+        self.assertEqual(result.outcome, "SIZE_OK")
+        self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+
     def test_size_mismatch_does_not_install_or_replace_target(self):
         target = self.root / self.entry["path"]
         target.write_bytes(b"old")
