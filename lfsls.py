@@ -225,9 +225,14 @@ def run_verification(root, inventory_path, entry, args, verifier_path):
     rel = entry["path"]
     with tempfile.TemporaryDirectory(prefix="lfsls-verify-") as td:
         temp = Path(td)
+        inventory_bytes = inventory_path.read_bytes()
+        if hashlib.sha256(inventory_bytes).hexdigest() != args.inventory_digest:
+            raise ValueError("inventory changed during state inspection")
+        private_inventory = temp / "lfs-inventory.json"
+        private_inventory.write_bytes(inventory_bytes)
         command = [
             sys.executable, str(verifier_path),
-            "--inventory", str(inventory_path),
+            "--inventory", str(private_inventory),
             "--run-id", "lfsls",
             "--manifest-out", str(temp / "expected.txt"),
             "--sha256-out", str(temp / "computed256.txt"),
@@ -344,6 +349,9 @@ def main():
                 if record["status"] not in ("SIZE_OK", "STALE"):
                     continue
                 verification = run_verification(root, inventory_path, item, args, verifier_path)
+                if verification["file_signature"] != record["file_signature"]:
+                    verification["status"] = "ERROR"
+                    verification["detail"] += "\\nFile signature changed during the lfsls verification interval."
                 record.setdefault("verification_history", []).append(verification)
                 if verification["status"] == "VERIFIED":
                     record["status"] = "VERIFIED"
