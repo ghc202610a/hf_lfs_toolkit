@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,9 @@ class AcquisitionResult:
     outcome: str
     observed_bytes: int | None = None
     detail: str | None = None
+    exit_code: int | None = None
+    stdout: str = ""
+    stderr: str = ""
 
 
 @dataclass
@@ -42,8 +46,27 @@ class AcquisitionBackend:
 
 
 class GitLFSBackend(AcquisitionBackend):
-    """Marker adapter; the existing runner owns Git LFS subprocess handling."""
+    """Run the established one-path Git LFS pull command."""
     name = "git-lfs"
+
+    def acquire(self, entry: dict, context: AcquisitionContext) -> AcquisitionResult:
+        command = ["git", "lfs", "pull", "--include=" + entry["path"], "--exclude="]
+        try:
+            result = subprocess.run(
+                command, cwd=str(context.root),
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            stdout = result.stdout.decode("utf-8", errors="replace")
+            stderr = result.stderr.decode("utf-8", errors="replace")
+            return AcquisitionResult(
+                self.name, "COMMAND_OK" if result.returncode == 0 else "ERROR",
+                exit_code=result.returncode, stdout=stdout, stderr=stderr,
+            )
+        except OSError as exc:
+            return AcquisitionResult(
+                self.name, "ERROR", detail="Git LFS process failed ({})".format(type(exc).__name__),
+                exit_code=127,
+            )
 
 
 class HuggingFaceHubBackend(AcquisitionBackend):
