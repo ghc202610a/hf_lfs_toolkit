@@ -19,12 +19,15 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Bind cached verification evidence to both the exact inventory fingerprint and the observed file signature; retain verification events separately from the current observation.
 - Keep the state report regenerable and separate from immutable snapshot inventory metadata.
 
-## N+3 — Resumable acquisition and operational preflight
+## N+3 — Reliable acquisition and operational preflight
 
-- Evaluate resumable pull behavior and explicit retry handling.
-- Add useful acquisition logs and disk-space preflight.
-- Support per-file verification and carefully scoped pruning only after each file is verified.
-- Preserve incomplete-download state and avoid deleting active transfer data.
+- Add `lfspull.py`, an inventory-driven serial pull runner.
+- Add bounded per-path retries with exponential backoff.
+- Add conservative disk-space preflight with a configurable reserve and explicit opt-out.
+- Add durable JSON Lines run/attempt/path outcome logging.
+- Skip already exact-size regular files by default while keeping size equality distinct from cryptographic verification.
+- Delegate incomplete-transfer and cache handling to Git LFS; never delete `.git/lfs/incomplete`.
+- Keep verification and pruning in their existing separate tools/stages.
 
 ## N+4 — LFS cache inspection and cleanup
 
