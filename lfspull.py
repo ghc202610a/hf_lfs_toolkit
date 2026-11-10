@@ -90,10 +90,16 @@ def select_entries(entries, paths, patterns):
     unknown = set(paths) - set(by_path)
     if unknown:
         raise ValueError("paths not present in inventory: " + ", ".join(sorted(unknown)))
-    return [entry for entry in entries
-            if (not paths or entry["path"] in paths)
-            and (not patterns or any(fnmatch.fnmatchcase(entry["path"], p)
-                                     for p in patterns))]
+    selected = [entry for entry in entries
+                if (not paths or entry["path"] in paths)
+                and (not patterns or any(fnmatch.fnmatchcase(entry["path"], p)
+                                         for p in patterns))]
+    for entry in selected:
+        if any(char in entry["path"] for char in ",*?["):
+            raise ValueError(
+                "path contains Git LFS include-pattern syntax that cannot be "
+                "passed literally: {!r}".format(entry["path"]))
+    return selected
 
 
 def main():
@@ -124,6 +130,9 @@ def main():
         inventory_path = Path(args.inventory).expanduser().resolve()
         inventory, entries = load_inventory(inventory_path)
         selected = select_entries(entries, args.paths, args.include)
+        if not selected:
+            print("No inventory paths selected.")
+            return 0
         root = Path(subprocess.run(
             ["git", "rev-parse", "--show-toplevel"], check=True, text=True,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -163,7 +172,7 @@ def main():
         resolved_log = log_path.resolve()
         if resolved_log == inventory_path:
             raise ValueError("log destination conflicts with immutable inventory")
-        for entry in selected:
+        for entry in entries:
             target = root.joinpath(*PurePosixPath(entry["path"]).parts)
             if resolved_log == target.resolve(strict=False):
                 raise ValueError("log destination conflicts with LFS working-tree path: {}".format(entry["path"]))
@@ -197,11 +206,17 @@ def main():
                                "path": rel, "attempt": attempt,
                                "expected_oid": entry["oid"],
                                "expected_size": entry["size"]})
-                    result = subprocess.run(
-                        ["git", "lfs", "pull", "--include=" + rel, "--exclude="],
-                        cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    out = result.stdout.decode("utf-8", errors="replace")
-                    err = result.stderr.decode("utf-8", errors="replace")
+                    try:
+                        result = subprocess.run(
+                            ["git", "lfs", "pull", "--include=" + rel, "--exclude="],
+                            cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        out = result.stdout.decode("utf-8", errors="replace")
+                        err = result.stderr.decode("utf-8", errors="replace")
+                    except OSError as exc:
+                        result = subprocess.CompletedProcess(
+                            ["git", "lfs", "pull"], 127, b"", str(exc).encode("utf-8"))
+                        out = ""
+                        err = str(exc)
                     if out:
                         sys.stdout.write(out)
                         sys.stdout.flush()
