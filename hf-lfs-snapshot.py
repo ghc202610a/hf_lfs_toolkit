@@ -95,7 +95,7 @@ def main():
     )
     ap.add_argument("--out", default=".", help="output parent directory")
     ap.add_argument("--name", help="snapshot directory name")
-    ap.add_argument("--archive", action="store_true", help="also create .tar.gz")
+    ap.add_argument("--no-archive", action="store_true", help="do not create .tar.gz")
     args = ap.parse_args()
 
     repo = args.repository.rstrip("/")
@@ -125,6 +125,11 @@ def main():
             cwd=clone,
             capture=True,
         )
+        listing = run(
+            ["git", "lfs", "ls-files", "--long", "--size"],
+            cwd=clone,
+            capture=True,
+        )
         _, entries = parse_lfs_json(raw_json)
 
         inventory = {
@@ -143,6 +148,37 @@ def main():
         }
 
         (dest / "local.lfsfiles.json").write_bytes(raw_json)
+        (dest / "local.lfsfiles.txt").write_bytes(listing)
+
+        clone_lines = [
+            "#!/bin/sh",
+            "set -eu",
+            "REPO=" + __import__("shlex").quote(repo),
+            "COMMIT=" + __import__("shlex").quote(inventory["git_commit"]),
+            "DEST=${1:-clone}",
+            'if [ -e "$DEST" ] || [ -L "$DEST" ]; then echo "Refusing to overwrite: $DEST" >&2; exit 2; fi',
+            'GIT_LFS_SKIP_SMUDGE=1 git clone "$REPO" "$DEST"',
+            'git -C "$DEST" checkout --detach "$COMMIT"',
+        ]
+        clone_script = "\n".join(clone_lines) + "\n"
+        (dest / "_clone.sh").write_text(clone_script, encoding="utf-8")
+        (dest / "_clone.sh").chmod(0o755)
+
+        pull_script = [
+            "#!/bin/sh",
+            "set -eu",
+            'cd "$(dirname -- "$0")/clone"',
+        ]
+        for entry in entries:
+            pull_script.append(
+                "git lfs pull --include="
+                + __import__("shlex").quote(entry["path"])
+            )
+        (dest / "local.lfspull.sh").write_text(
+            "\n".join(pull_script) + "\n",
+            encoding="utf-8",
+        )
+        (dest / "local.lfspull.sh").chmod(0o755)
 
         (dest / "lfs-inventory.json").write_text(
             json.dumps(inventory, indent=2, ensure_ascii=False) + "\n",
@@ -154,7 +190,7 @@ def main():
         print(f"Inventory: {dest / 'lfs-inventory.json'}")
         print(f"Pointer-only clone: {clone}")
 
-        if args.archive:
+        if not args.no_archive:
             archive = parent / f"{dirname}.tar.gz"
             with tarfile.open(archive, "w:gz") as tf:
                 tf.add(dest, arcname=dirname)

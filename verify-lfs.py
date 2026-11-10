@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import time
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -164,6 +167,19 @@ def load_inventory(path):
     return inventory, entries
 
 
+def reject_symlink_path(root, path):
+    rel = path.relative_to(root)
+    current = root
+    for component in rel.parts:
+        current = current / component
+        try:
+            mode = current.lstat().st_mode
+        except FileNotFoundError:
+            break
+        if stat.S_ISLNK(mode):
+            raise ValueError(f"symlink in inventory path: {current}")
+
+
 def file_signature(path):
     """Return stable file identity and size information."""
     try:
@@ -201,7 +217,7 @@ def main():
     )
     ap.add_argument(
         "--manifest-out",
-        default="local.sha256sums.check.txt",
+        default=None,
         help="authoritative expected SHA-256 manifest",
     )
     ap.add_argument(
@@ -210,12 +226,12 @@ def main():
     )
     ap.add_argument(
         "--sha512-out",
-        default="local.sha512sums",
+        default=None,
         help="computed SHA-512 inventory",
     )
     ap.add_argument(
         "--log-out",
-        default="local.sha256sums.hashcheck.checked.txt",
+        default=None,
         help="HashSuite verification output",
     )
     ap.add_argument("-j", "--jobs", type=int, default=min(os.cpu_count() or 1, 8))
@@ -227,7 +243,31 @@ def main():
         help="remove verified LFS cache objects after successful verification",
     )
 
+    ap.add_argument(
+        "--run-id",
+        help="output identifier; default UTC timestamp and Unix time",
+    )
     args = ap.parse_args()
+
+    run_id = args.run_id or (
+        dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S_")
+        + str(int(time.time()))
+    )
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
+        ap.error("invalid --run-id")
+
+    args.manifest_out = (
+        args.manifest_out or f"local.sha256sums.check.{run_id}.txt"
+    )
+    args.sha256_out = (
+        args.sha256_out or f"local.sha256sums.{run_id}.txt"
+    )
+    args.sha512_out = (
+        args.sha512_out or f"local.sha256sums.sha512.{run_id}.txt"
+    )
+    args.log_out = (
+        args.log_out or f"local.hashcheck.{run_id}.log"
+    )
 
     if args.jobs < 1 or args.chunk_mib < 1:
         ap.error("--jobs and --chunk-mib must be positive")
@@ -332,13 +372,15 @@ def main():
     for entry in selected:
         path = root.joinpath(*PurePosixPath(entry["path"]).parts)
 
-        # Reject symlinks that resolve outside the repository.
-        resolved = path.resolve(strict=False)
-        if not resolved.is_relative_to(root):
-            print(
-                f"ERROR: LFS path resolves outside worktree: {entry['path']}",
-                file=sys.stderr,
-            )
+        try:
+            reject_symlink_path(root, path)
+            resolved = path.resolve(strict=False)
+            if not resolved.is_relative_to(root):
+                raise ValueError(
+                    f"LFS path resolves outside worktree: {entry['path']}"
+                )
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
             return 2
 
         before[entry["path"]] = file_signature(path)
@@ -386,8 +428,14 @@ def main():
             sys.stderr.buffer.flush()
 
         if log_out:
-            atomic_write(log_out, result.stdout)
-            print(f"Saved verification output: {log_out}")
+            log_data = (
+                b"===== HashSuite stdout =====\n"
+                + result.stdout
+                + b"\n===== HashSuite stderr =====\n"
+                + result.stderr
+            )
+            atomic_write(log_out, log_data)
+            print(f"Saved combined verification log: {log_out}")
 
     if result.returncode not in (0, 1):
         print(

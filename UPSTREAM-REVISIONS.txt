@@ -1,0 +1,2 @@
+hf_lfs_toolkit 773b2f69f7ec1e929e1ea579e122b10bab7eb686 https://github.com/ghc202610a/hf_lfs_toolkit.git
+hashsuite a3bd3041c35faa41543906b02fb0128ad03ac1cd https://github.com/ghc202610a/hashsuite.git
