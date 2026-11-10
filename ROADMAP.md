@@ -23,7 +23,7 @@ This is a planning document. Items below are proposed follow-on work, not statem
 
 - Add `lfspull.py`, an inventory-driven serial pull runner.
 - Add bounded per-path retries with exponential backoff.
-- Add conservative disk-space preflight with a configurable reserve and explicit opt-out.
+- Add worktree free-space preflight with a configurable reserve and explicit opt-out.
 - Add durable JSON Lines run/attempt/path outcome logging.
 - Skip already exact-size regular files by default while keeping size equality distinct from cryptographic verification.
 - Delegate incomplete-transfer and cache handling to Git LFS; never delete `.git/lfs/incomplete`.
