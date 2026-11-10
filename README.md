@@ -65,6 +65,18 @@ cd /path/to/snapshot/clone
 
 Each path is passed as a separately quoted include value. Avoid broad patterns unless you intend to materialize all matching files. Git LFS authentication and remote access are handled by Git/Git LFS, not by this toolkit.
 
+For retry handling, disk-space preflight, and a durable per-run log, use the inventory-driven Python runner from the clone working tree:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfspull.py \
+  --inventory ../lfs-inventory.json \
+  --retries 3 --retry-delay 5
+```
+
+The runner processes selected paths serially and invokes `git lfs pull` separately for each path. It retries failed pulls with exponential backoff, checks available space before starting, and writes JSON Lines events to `local.lfspull.TIMESTAMP.jsonl` (or the path supplied with `--log`). A rerun is safe: Git LFS manages its own local object and incomplete-transfer data, which this tool does not delete or rewrite. Exact-size working-tree files are skipped by default; this is an acquisition shortcut, not cryptographic verification. Use `--force` to invoke Git LFS for those paths too.
+
+The preflight conservatively estimates required space as the sum of expected sizes for paths that are not already exact-size files, plus a default 1 GiB reserve. Adjust the reserve with `--reserve-gib`, or explicitly disable the check with `--no-space-check`. Select exact paths or repeatable globs with positional paths and `--include`. A nonzero exit status means at least one selected path did not complete with the expected size; inspect the run log and rerun the failed paths as needed. A `SIZE_OK` result does not establish SHA-256 integrity; use `verify-lfs.py` or `lfsls.py --verify` for that.
+
 The generated `_clone.sh` can recreate the pointer-only checkout at the captured commit:
 
 ```sh
