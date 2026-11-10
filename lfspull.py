@@ -140,6 +140,8 @@ def main():
         parser.error("--retries must be nonnegative and --retry-delay finite and nonnegative")
     if args.reserve_gib < 0 or not math.isfinite(args.reserve_gib):
         parser.error("--reserve-gib must be finite and nonnegative")
+    if args.backend != "hf-hub" and (args.replace or args.hf_cache_dir or args.disable_xet):
+        parser.error("--replace, --hf-cache-dir, and --disable-xet require --backend hf-hub")
 
     try:
         inventory_path = Path(args.inventory).expanduser().resolve()
@@ -181,7 +183,9 @@ def main():
             status, detail = path_status(root, entry["path"], entry["size"])
             if status == "SIZE_OK" and not args.force:
                 skipped.append((entry, status))
-            elif status in ("PARTIAL", "MISMATCH") and args.backend == "hf-hub" and args.replace:
+            elif status in ("PARTIAL", "MISMATCH") and args.backend == "hf-hub":
+                if not args.replace:
+                    raise ValueError("{}: existing non-pointer file has a different size; use --replace to authorize replacement".format(entry["path"]))
                 target = root.joinpath(*PurePosixPath(entry["path"]).parts)
                 if not target.is_file() or target.is_symlink():
                     raise ValueError("{}: replacement target is not a regular non-symlink file".format(entry["path"]))
