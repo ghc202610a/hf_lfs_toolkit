@@ -10,6 +10,7 @@ from unittest import mock
 MODULE_PATH = Path(__file__).resolve().parents[1] / "lfsbackends.py"
 SPEC = importlib.util.spec_from_file_location("lfsbackends_module", MODULE_PATH)
 backends = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = backends
 SPEC.loader.exec_module(backends)
 
 
