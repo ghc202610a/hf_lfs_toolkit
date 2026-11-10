@@ -73,6 +73,13 @@ def path_status(root, rel, expected_size):
     if not path.is_file():
         return "UNKNOWN", "path is not a regular file"
     if st.st_size == expected_size:
+        try:
+            with path.open("rb") as stream:
+                header = stream.read(128)
+        except OSError as exc:
+            return "UNKNOWN", str(exc)
+        if header.startswith(b"version https://git-lfs.github.com/spec/v1\\n"):
+            return "POINTER", None
         return "SIZE_OK", None
     if st.st_size < expected_size:
         return "PARTIAL", None
