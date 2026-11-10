@@ -132,9 +132,9 @@ class LfsPullTests(unittest.TestCase):
         expected_size = 0
         for _ in range(5):
             pointer = (
-                "version https://git-lfs.github.com/spec/v1\\n"
-                "oid sha256:" + "a" * 64 + "\\n"
-                "size " + str(expected_size) + "\\n"
+                "version https://git-lfs.github.com/spec/v1\n"
+                "oid sha256:" + "a" * 64 + "\n"
+                "size " + str(expected_size) + "\n"
             ).encode("ascii")
             expected_size = len(pointer)
         self.assertEqual(len(pointer), expected_size)
