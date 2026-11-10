@@ -4,8 +4,10 @@
 
 - `hf-lfs-snapshot.py` — clones a Hugging Face Git repository with LFS smudging disabled, captures raw and normalized LFS inventories, and emits helper scripts.
 - `verify-lfs.py` — validates inventory entries and working-tree paths, invokes external HashSuite `hashcheck.py`, checks file size/stability, and optionally prunes verified LFS cache objects.
+- `lfsls.py` — reports live pointer/materialization state and maintains `local.lfsstate.json` separately from the captured inventory.
 - `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.
 - `tests/test_n1_regression.py` — deterministic regression tests for snapshot capture outputs and verifier safety behavior.
+- `tests/test_n2_lfs_state.py` — deterministic local-state classification and cache-invalidation tests.
 - `UPSTREAM-REVISIONS.txt` — pinned source revisions used as upstream references for the toolkit and HashSuite.
 
 ## Runtime dependencies
@@ -19,7 +21,7 @@ No third-party Python package is required by the toolkit scripts themselves.
 From the repository root:
 
 ```sh
-python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py
+python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py
 python3 -m unittest discover -s tests -v
 ```
 
@@ -31,7 +33,7 @@ The regression suite exercises:
 - symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;
 - verifier success/failure outcomes using a controlled HashSuite subprocess stub, including all-or-none pruning and preservation of `.git/lfs/incomplete`.
 
-These tests mock Git clone/list operations and the HashSuite process. They do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
+These tests mock Git clone/list operations and the HashSuite process. The N+2 state tests use temporary filesystems and do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
 
 When changing verifier behavior, use a temporary Git worktree and a controlled HashSuite fixture or the pinned HashSuite checkout. Test both successful and failing checksum cases, size mismatch, missing/non-regular paths, symlinks in intermediate components, file mutation during hashing, subprocess error handling, and the all-or-none prune rule.
 
@@ -54,3 +56,11 @@ Do not duplicate the digest implementation in this repository. If HashSuite's CL
 - Test extraction into a fresh directory and inspect the extracted file list.
 - Do not claim a package contains files or tests that are absent from the source tree.
 - Do not include local credentials, model weights, cache contents, temporary logs, or machine-specific paths in a release artifact.
+
+## Local LFS state reporter
+
+`lfsls.py` reads the immutable `hf-lfs-inventory-v1` inventory and observes the corresponding paths in the current Git worktree. It writes `local.lfsstate.json` beside the inventory unless `--state` overrides the destination. The state document is bound to the inventory's SHA-256 fingerprint; a changed inventory invalidates cached observations and verification evidence.
+
+The reporter distinguishes `POINTER`, `MISSING`, `PARTIAL`, `SIZE_OK`, `VERIFIED`, `MISMATCH`, `STALE`, and `UNKNOWN`. A matching size is not proof of matching content. A `VERIFIED` result is reusable only when both the inventory fingerprint and the current file signature match the recorded verification event. Verification events are retained in per-path history.
+
+`--verify` invokes `verify-lfs.py` separately for each selected file currently classified as `SIZE_OK` or `STALE`. It records verification outcomes but does not request or perform cache pruning. `--audit` compares current observations with saved state without writing the state file. Symlinked path components are classified as `UNKNOWN`; the reporter does not follow them to inspect files outside the worktree.

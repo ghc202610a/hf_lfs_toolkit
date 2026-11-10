@@ -143,7 +143,51 @@ Useful options:
 
 A failed verification returns a nonzero status. A subset of successful files may still appear in computed manifests; inspect the final `LFS result` line and the process exit status before treating the run as successful.
 
-## 4. Optional LFS cache pruning
+## 4. Inspect local LFS state
+
+Run the state reporter from inside the matching Git working tree:
+
+```sh
+cd /path/to/snapshot/clone
+python3 /path/to/hf_lfs_toolkit/lfsls.py --inventory ../lfs-inventory.json
+```
+
+The reporter writes `local.lfsstate.json` beside the inventory by default. This file is a mutable observation record; it does not modify `lfs-inventory.json`, which remains the immutable expected snapshot. The state file is tied to the exact inventory bytes by a SHA-256 fingerprint. A different inventory invalidates the old cached state.
+
+Reported statuses are:
+
+- `POINTER` — a valid Git LFS pointer matching the captured OID and size is present.
+- `MISSING` — the inventory path is absent.
+- `PARTIAL` — a regular file exists but is smaller than the expected size.
+- `SIZE_OK` — a regular file has the expected size, but has no current matching verification record.
+- `VERIFIED` — HashSuite verification succeeded for the current file signature and inventory.
+- `MISMATCH` — a pointer/size mismatch or a failed checksum was observed.
+- `STALE` — previous verification evidence exists, but the file signature or inventory has changed.
+- `UNKNOWN` — the path is a symlink, non-regular, inaccessible, or otherwise unresolved.
+
+Size equality alone is not cryptographic verification. Filesystem observations take precedence over cached state. Verification evidence is retained as a history and only applies to the exact file signature and inventory fingerprint recorded with it.
+
+Useful reporting options:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfsls.py --status VERIFIED
+python3 /path/to/hf_lfs_toolkit/lfsls.py --status MISSING,PARTIAL
+python3 /path/to/hf_lfs_toolkit/lfsls.py --include '*.safetensors' --json
+python3 /path/to/hf_lfs_toolkit/lfsls.py --audit
+```
+
+`--include` accepts repeatable shell-style path patterns. `--audit` compares current observations with the saved state without writing it and returns status 1 when changes are found. `--json` emits machine-readable results.
+
+To verify eligible materialized files through the existing HashSuite-backed verifier:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfsls.py \
+  --inventory ../lfs-inventory.json --verify --hashcheck "$HOME/src/hashsuite/hashcheck.py"
+```
+
+`--verify` invokes `verify-lfs.py` separately for each selected `SIZE_OK` or `STALE` file, records the result, and does not enable cache pruning. Missing, pointer, partial, and otherwise unresolved files are reported but not sent to HashSuite.
+
+## 5. Optional LFS cache pruning
 
 `--prune` removes corresponding local Git LFS cache objects only when every selected file passes the complete SHA-256 and size/stability checks:
 
@@ -170,4 +214,4 @@ Run the toolkit's current regression tests from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-The present regression file covers duplicate LFS path rejection and symlink-component rejection. This is a small regression set, not comprehensive integration coverage of remote cloning, downloads, HashSuite, or cache pruning. See [DEVELOPMENT.md](DEVELOPMENT.md) for development notes and current test scope.
+The regression suite includes snapshot/verifier safety tests and local-state classification tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.

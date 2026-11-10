@@ -15,7 +15,9 @@ This is a planning document. Items below are proposed follow-on work, not statem
 
 - Add a dedicated `lfsls.py` presentation/reporting utility.
 - Define `local.lfsstate.json` as a machine-readable view of current local LFS state.
-- Distinguish pointer-present, downloaded/materialized, missing, and otherwise unresolved states without conflating acquisition with verification.
+- Distinguish pointer-present, missing, partial, size-correct, verified, mismatched, stale, and unresolved states without conflating acquisition with verification.
+- Bind cached verification evidence to both the exact inventory fingerprint and the observed file signature; retain verification events separately from the current observation.
+- Keep the state report regenerable and separate from immutable snapshot inventory metadata.
 
 ## N+3 — Resumable acquisition and operational preflight
 

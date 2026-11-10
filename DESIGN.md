@@ -49,3 +49,27 @@ The expected manifest is built from the complete inventory, while the computed m
 ## Cache pruning
 
 Pruning is deliberately conservative: if any selected path fails either checksum or size/stability validation, no selected cache objects are removed. Only corresponding objects in the Git LFS object cache are eligible. Incomplete-download storage is outside the pruning target.
+
+## Mutable local state
+
+`lfs-inventory.json` remains the immutable expected snapshot. `local.lfsstate.json` is a separate mutable observation document with format identifier `hf-lfs-state-v1`. It is stored beside the inventory by default and includes:
+
+- `inventory_sha256` — SHA-256 fingerprint of the exact inventory file bytes;
+- `updated_at_utc` — last state update time;
+- `entries` — path-keyed current observations, each with status, observation time, and a filesystem signature when a regular file is present;
+- `verification_history` — append-only-in-practice per-path verification events, including outcome, timestamp, inventory fingerprint, file signature, exit code, and bounded diagnostic output.
+
+If the inventory fingerprint changes, prior cached state is discarded rather than being applied to a different snapshot. A verification event is considered current only when its inventory fingerprint and file signature match the current inventory and filesystem observation. The reporter never treats expected-size equality as cryptographic verification.
+
+The current status vocabulary is:
+
+- `POINTER` — pointer content agrees with the captured OID and size;
+- `MISSING` — path does not exist;
+- `PARTIAL` — regular file is shorter than the expected size;
+- `SIZE_OK` — regular file size matches, but no current successful verification evidence applies;
+- `VERIFIED` — a successful HashSuite verification applies to the current signature;
+- `MISMATCH` — pointer metadata, file size, or content verification disagrees with the inventory;
+- `STALE` — verification evidence exists but belongs to a different file signature or inventory;
+- `UNKNOWN` — symlink, non-regular file, inaccessible path, or unresolved condition.
+
+Live filesystem evidence takes precedence over cached status. Symlink components are rejected before inspection so a repository-relative path cannot redirect observation outside the worktree. `--audit` is read-only; ordinary reporting refreshes the selected observations. `--verify` delegates hashing to the existing verifier one file at a time and does not prune cache objects.
