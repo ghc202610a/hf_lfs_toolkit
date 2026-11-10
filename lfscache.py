@@ -78,8 +78,12 @@ def scan_cache(cache_dir):
     objects_dir = cache_dir / "objects"
     if not objects_dir.exists():
         return objects, skipped_symlinks, unreadable
-    if not objects_dir.is_dir():
-        raise ValueError(f"Git LFS objects path is not a directory: {objects_dir}")
+    try:
+        objects_mode = objects_dir.lstat().st_mode
+    except FileNotFoundError:
+        return objects, skipped_symlinks, unreadable
+    if not stat.S_ISDIR(objects_mode):
+        raise ValueError(f"Git LFS objects path is not a real directory (symlinks are not followed): {objects_dir}")
 
     def walk(directory, relative):
         nonlocal skipped_symlinks, unreadable
