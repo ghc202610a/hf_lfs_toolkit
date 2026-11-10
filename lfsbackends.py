@@ -74,7 +74,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
 
     @staticmethod
     def repository_id(repository: str) -> str:
-        """Accept only an unambiguous public HTTPS model-repository URL."""
+        """Accept only an unambiguous HTTPS model-repository URL."""
         if not isinstance(repository, str):
             raise ValueError("Hub backend requires a huggingface.co model repository URL")
         try:
@@ -87,7 +87,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
 
         if (
             parsed.scheme != "https"
-            or hostname not in ("huggingface.co", "www.huggingface.co")
+            or hostname != "huggingface.co"
             or parsed.username is not None
             or parsed.password is not None
             or port is not None
