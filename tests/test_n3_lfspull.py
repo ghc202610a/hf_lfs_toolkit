@@ -128,6 +128,21 @@ class LfsPullTests(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertIn("FAILED:", err)
 
+    def test_pointer_is_not_skipped_even_when_its_size_matches_inventory(self):
+        pointer = (
+            "version https://git-lfs.github.com/spec/v1\\n"
+            "oid sha256:" + "a" * 64 + "\\n"
+            "size " + str(len(self.payload)) + "\\n"
+        ).encode("ascii")
+        self.entry["size"] = len(pointer)
+        self.write_inventory([self.entry])
+        target = self.root / self.entry["path"]
+        target.write_bytes(pointer)
+        self.assertEqual(
+            lfspull.path_status(self.root, self.entry["path"], len(pointer)),
+            ("POINTER", None),
+        )
+
     def test_inventory_rejects_duplicate_and_unsafe_paths(self):
         duplicate = [self.entry, dict(self.entry)]
         self.write_inventory(duplicate)
