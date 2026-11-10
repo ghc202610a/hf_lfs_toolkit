@@ -6,10 +6,10 @@
 - `verify-lfs.py` — validates inventory entries and working-tree paths, invokes external HashSuite `hashcheck.py`, checks file size/stability, and optionally prunes verified LFS cache objects.
 - `lfsls.py` — reports live pointer/materialization state and maintains `local.lfsstate.json` separately from the captured inventory.
 - `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.
-- `lfspull.py` — inventory-driven serial acquisition runner with disk-space preflight, bounded retries, and JSON Lines run logging.
+- `lfspull.py` — inventory-driven serial acquisition runner with disk-space preflight, bounded retries, and JSON Lines run logging.\n- `lfscache.py` — read-only inventory of canonical objects in the configured Git LFS media cache.
 - `tests/test_n1_regression.py` — deterministic regression tests for snapshot capture outputs and verifier safety behavior.
 - `tests/test_n2_lfs_state.py` — deterministic local-state classification and cache-invalidation tests.
-- `tests/test_n3_lfspull.py` — deterministic acquisition-runner tests using mocked Git commands.
+- `tests/test_n3_lfspull.py` — deterministic acquisition-runner tests using mocked Git commands.\n- `tests/test_n4_lfscache.py` — deterministic cache-layout, inventory-correlation, and symlink-safety tests.
 - `UPSTREAM-REVISIONS.txt` — pinned source revisions used as upstream references for the toolkit and HashSuite.
 
 ## Runtime dependencies
@@ -33,7 +33,7 @@ The regression suite exercises:
 - snapshot output generation, generated shell quoting for spaces/quotes/metacharacters, executable helper modes, archive default behavior, and `--no-archive`;
 - normalized inventory validation and checksum-manifest filename escaping;
 - symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;
-- LFS pull retry behavior, disk-space preflight, size-correct skip behavior, JSONL logging, and symlink-path rejection;
+- LFS pull retry behavior, disk-space preflight, size-correct skip behavior, JSONL logging, and symlink-path rejection;\n- canonical LFS cache object discovery, duplicate-OID inventory handling, cache size mismatches, and symlink non-traversal;
 - verifier success/failure outcomes using a controlled HashSuite subprocess stub, including all-or-none pruning and preservation of `.git/lfs/incomplete`.
 
 These tests mock Git clone/list operations and the HashSuite process. The N+2 state tests use temporary filesystems and do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
@@ -49,6 +49,10 @@ When changing snapshot behavior, test malformed JSON, duplicate paths, invalid O
 Before the first transfer, the runner checks free space on the worktree filesystem. Its estimate sums expected sizes for selected paths that are not already regular files of the expected size, then adds the configured reserve (1 GiB by default). It checks the worktree filesystem only and does not inspect a separately configured Git LFS media directory. It does not attempt to predict filesystem compression, sparse allocation, duplicate remote transfer behavior, or unrelated concurrent disk use; it is not a reservation or guarantee. The check can be disabled explicitly.
 
 The JSON Lines log is appended and flushed after each event. It records run boundaries, selected paths, attempt results, bounded stdout/stderr excerpts, and final per-path outcomes. A rerun invokes Git LFS again for paths that are not already exact-size; the runner does not manipulate `.git/lfs/incomplete`, delete cache objects, or claim cryptographic verification. Exact size is only an acquisition-level observation. HashSuite verification remains a separate stage.
+
+## LFS cache inventory
+
+`lfscache.py` reads the `LocalMediaDir` reported by `git lfs env` unless `--cache-dir` is supplied. It scans only the `objects` directory and recognizes the canonical two-character/two-character/60-character SHA-256 object path. It reports correlation with one inventory but cannot establish global reachability across other repositories sharing the cache. The command is read-only and does not inspect `.git/lfs/incomplete`.
 
 ## HashSuite integration contract
 
