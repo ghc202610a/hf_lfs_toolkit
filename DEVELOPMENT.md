@@ -6,8 +6,10 @@
 - `verify-lfs.py` — validates inventory entries and working-tree paths, invokes external HashSuite `hashcheck.py`, checks file size/stability, and optionally prunes verified LFS cache objects.
 - `lfsls.py` — reports live pointer/materialization state and maintains `local.lfsstate.json` separately from the captured inventory.
 - `lfspull.sh` — static helper for pulling explicitly named paths from the current Git working tree.
+- `lfspull.py` — inventory-driven serial acquisition runner with disk-space preflight, bounded retries, and JSON Lines run logging.
 - `tests/test_n1_regression.py` — deterministic regression tests for snapshot capture outputs and verifier safety behavior.
 - `tests/test_n2_lfs_state.py` — deterministic local-state classification and cache-invalidation tests.
+- `tests/test_n3_lfspull.py` — deterministic acquisition-runner tests using mocked Git commands.
 - `UPSTREAM-REVISIONS.txt` — pinned source revisions used as upstream references for the toolkit and HashSuite.
 
 ## Runtime dependencies
@@ -21,7 +23,7 @@ No third-party Python package is required by the toolkit scripts themselves.
 From the repository root:
 
 ```sh
-python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py
+python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py lfspull.py
 python3 -m unittest discover -s tests -v
 ```
 
@@ -31,6 +33,7 @@ The regression suite exercises:
 - snapshot output generation, generated shell quoting for spaces/quotes/metacharacters, executable helper modes, archive default behavior, and `--no-archive`;
 - normalized inventory validation and checksum-manifest filename escaping;
 - symlink components and leaf symlinks, non-regular files, and missing HashSuite discovery;
+- LFS pull retry behavior, disk-space preflight, size-correct skip behavior, JSONL logging, and symlink-path rejection;
 - verifier success/failure outcomes using a controlled HashSuite subprocess stub, including all-or-none pruning and preservation of `.git/lfs/incomplete`.
 
 These tests mock Git clone/list operations and the HashSuite process. The N+2 state tests use temporary filesystems and do not exercise a live Hugging Face remote, actual Git LFS transfers, the real HashSuite implementation, concurrent file mutation during hashing, or platform-specific filesystem behavior. Run the real HashSuite suite separately when validating a release.
@@ -38,6 +41,14 @@ These tests mock Git clone/list operations and the HashSuite process. The N+2 st
 When changing verifier behavior, use a temporary Git worktree and a controlled HashSuite fixture or the pinned HashSuite checkout. Test both successful and failing checksum cases, size mismatch, missing/non-regular paths, symlinks in intermediate components, file mutation during hashing, subprocess error handling, and the all-or-none prune rule.
 
 When changing snapshot behavior, test malformed JSON, duplicate paths, invalid OIDs and sizes, unsafe paths, output naming, generated shell quoting, and archive enabled/disabled behavior. Keep remote network tests separate from deterministic unit tests.
+
+## Acquisition runner
+
+`lfspull.py` reads the captured inventory, validates selected paths, and runs one `git lfs pull --include=PATH --exclude=` subprocess per path. It is serial by design. A failed command or a post-pull file that does not have the expected size is retried up to the configured retry count with capped exponential backoff. The default is two retries after the first attempt.
+
+Before the first transfer, the runner checks free space on the worktree filesystem. Its estimate sums expected sizes for selected paths that are not already regular files of the expected size, then adds the configured reserve (1 GiB by default). It checks the worktree filesystem only and does not inspect a separately configured Git LFS media directory. It does not attempt to predict filesystem compression, sparse allocation, duplicate remote transfer behavior, or unrelated concurrent disk use; it is not a reservation or guarantee. The check can be disabled explicitly.
+
+The JSON Lines log is appended and flushed after each event. It records run boundaries, selected paths, attempt results, bounded stdout/stderr excerpts, and final per-path outcomes. A rerun invokes Git LFS again for paths that are not already exact-size; the runner does not manipulate `.git/lfs/incomplete`, delete cache objects, or claim cryptographic verification. Exact size is only an acquisition-level observation. HashSuite verification remains a separate stage.
 
 ## HashSuite integration contract
 
