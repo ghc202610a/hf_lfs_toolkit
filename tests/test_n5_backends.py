@@ -96,7 +96,6 @@ class HubBackendTests(unittest.TestCase):
         for url in (
             "https://huggingface.co/org/model",
             "https://huggingface.co/org/model/",
-            "https://www.huggingface.co/org/model",
         ):
             with self.subTest(url=url):
                 self.assertEqual(
@@ -121,6 +120,7 @@ class HubBackendTests(unittest.TestCase):
             "https://huggingface.co//org/model",
             "https://huggingface.co/org%2Fother/model",
             "https://huggingface.co/org/model;params",
+            "https://www.huggingface.co/org/model",
             "https://example.com/org/model",
         )
         for url in invalid_urls:
