@@ -160,6 +160,19 @@ def main():
         log_path.parent.mkdir(parents=True, exist_ok=True)
         if log_path.is_symlink():
             raise ValueError("log destination must not be a symlink")
+        resolved_log = log_path.resolve()
+        if resolved_log == inventory_path:
+            raise ValueError("log destination conflicts with immutable inventory")
+        for entry in selected:
+            target = root.joinpath(*PurePosixPath(entry["path"]).parts)
+            if resolved_log == target.resolve(strict=False):
+                raise ValueError("log destination conflicts with LFS working-tree path: {}".format(entry["path"]))
+            if log_path.exists() and target.exists():
+                try:
+                    if os.path.samefile(log_path, target):
+                        raise ValueError("log destination aliases LFS working-tree path: {}".format(entry["path"]))
+                except OSError:
+                    pass
 
         successes = len(skipped)
         failures = 0
