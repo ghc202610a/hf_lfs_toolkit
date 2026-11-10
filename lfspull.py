@@ -181,7 +181,7 @@ def main():
             status, detail = path_status(root, entry["path"], entry["size"])
             if status == "SIZE_OK" and not args.force:
                 skipped.append((entry, status))
-            elif status == "MISMATCH" and args.backend == "hf-hub" and args.replace:
+            elif status in ("PARTIAL", "MISMATCH") and args.backend == "hf-hub" and args.replace:
                 target = root.joinpath(*PurePosixPath(entry["path"]).parts)
                 if not target.is_file() or target.is_symlink():
                     raise ValueError("{}: replacement target is not a regular non-symlink file".format(entry["path"]))
