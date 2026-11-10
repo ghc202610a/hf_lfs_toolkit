@@ -20,7 +20,7 @@
 
 The snapshot tool requires Python 3.9+, Git, and Git LFS. The verifier additionally requires the separate HashSuite `hashcheck.py` script. The default acquisition backend uses the standard library; the optional `hf-hub` backend requires `huggingface_hub`. HashSuite discovery is controlled by `--hashcheck`, `HASHSUITE_HASHCHECK`, `HASHSUITE_DIR`, or `PATH`; see README for the exact precedence.
 
-No third-party Python package is required by the toolkit scripts themselves.
+No third-party Python package is required for the default Git LFS workflow. The optional Hub backend requires `huggingface_hub`.
 
 ## Local validation
 
