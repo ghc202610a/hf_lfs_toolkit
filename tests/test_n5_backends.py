@@ -92,11 +92,41 @@ class HubBackendTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"old")
         self.assertEqual(result.detail, "Hub cache file size differs from captured inventory")
 
-    def test_repository_url_scope_is_model_only(self):
-        self.assertEqual(
-            backends.HuggingFaceHubBackend.repository_id("https://huggingface.co/org/model"),
-            "org/model",
+    def test_repository_url_accepts_canonical_model_urls(self):
+        for url in (
+            "https://huggingface.co/org/model",
+            "https://huggingface.co/org/model/",
+            "https://www.huggingface.co/org/model",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(
+                    backends.HuggingFaceHubBackend.repository_id(url),
+                    "org/model",
+                )
+
+    def test_repository_url_rejects_noncanonical_or_ambiguous_urls(self):
+        invalid_urls = (
+            "http://huggingface.co/org/model",
+            "ftp://huggingface.co/org/model",
+            "https://user@huggingface.co/org/model",
+            "https://user:secret@huggingface.co/org/model",
+            "https://huggingface.co:443/org/model",
+            "https://huggingface.co:bad/org/model",
+            "https://huggingface.co/org/model?download=1",
+            "https://huggingface.co/org/model#fragment",
+            "https://huggingface.co/datasets/org/data",
+            "https://huggingface.co/org/model/extra",
+            "https://huggingface.co//org/model",
+            "https://huggingface.co/org%2Fother/model",
+            "https://huggingface.co/org/model;params",
+            "https://example.com/org/model",
         )
+        for url in invalid_urls:
+            with self.subTest(url=url):
+                with self.assertRaises(ValueError):
+                    backends.HuggingFaceHubBackend.repository_id(url)
+
+    def test_repository_url_scope_is_model_only(self):
         with self.assertRaisesRegex(ValueError, "model repository"):
             backends.HuggingFaceHubBackend.repository_id("https://huggingface.co/datasets/org/data")
 
