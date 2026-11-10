@@ -14,7 +14,7 @@
 
 ## Runtime dependencies
 
-The snapshot tool requires Python 3.9+, Git, and Git LFS. The verifier additionally requires the separate HashSuite `hashcheck.py` script. HashSuite discovery is controlled by `--hashcheck`, `HASHSUITE_HASHCHECK`, `HASHSUITE_DIR`, or `PATH`; see README for the exact precedence.
+The snapshot tool requires Python 3.9+, Git, and Git LFS. The verifier additionally requires the separate HashSuite `hashcheck.py` script. The default acquisition backend uses the standard library; the optional `hf-hub` backend requires `huggingface_hub`. HashSuite discovery is controlled by `--hashcheck`, `HASHSUITE_HASHCHECK`, `HASHSUITE_DIR`, or `PATH`; see README for the exact precedence.
 
 No third-party Python package is required by the toolkit scripts themselves.
 
@@ -23,7 +23,7 @@ No third-party Python package is required by the toolkit scripts themselves.
 From the repository root:
 
 ```sh
-python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py lfspull.py lfscache.py
+python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py lfspull.py lfsbackends.py lfscache.py
 python3 -m unittest discover -s tests -v
 ```
 
@@ -49,6 +49,14 @@ When changing snapshot behavior, test malformed JSON, duplicate paths, invalid O
 Before the first transfer, the runner checks free space on the worktree filesystem. Its estimate sums expected sizes for selected paths that are not already regular files of the expected size, then adds the configured reserve (1 GiB by default). It checks the worktree filesystem only and does not inspect a separately configured Git LFS media directory. It does not attempt to predict filesystem compression, sparse allocation, duplicate remote transfer behavior, or unrelated concurrent disk use; it is not a reservation or guarantee. The check can be disabled explicitly.
 
 The JSON Lines log is appended and flushed after each event. It records run boundaries, selected paths, attempt results, bounded stdout/stderr excerpts, and final per-path outcomes. A rerun invokes Git LFS again for paths that are not already exact-size; the runner does not manipulate `.git/lfs/incomplete`, delete cache objects, or claim cryptographic verification. Exact size is only an acquisition-level observation. HashSuite verification remains a separate stage.
+
+## Alternative acquisition backend
+
+The default `lfspull.py` path remains Git LFS and does not import third-party packages. The optional `--backend hf-hub` path imports `lfsbackends.py` and requires `huggingface_hub`. It is limited to model repository URLs in the captured inventory and passes the full captured `git_commit` as `revision`. A missing or invalid commit is an error; there is no moving-revision fallback.
+
+The Hub API owns authentication, transfer selection, and its cache. `--hf-cache-dir` maps to the API's `cache_dir` argument. `--disable-xet` sets `HF_HUB_DISABLE_XET=1` before the Hub download API is imported. The run-start record includes the selected backend and non-secret cache/Xet diagnostics. Hub exceptions are reduced to safe categories rather than copied verbatim into the log.
+
+The Hub backend checks the returned cache file size, copies it to a temporary sibling under the target directory, checks the staged size, and atomically replaces the target. It does not alter the Hub cache. Existing materialized targets require explicit `--replace` authorization when a replacement is requested; `--force` alone is not replacement authorization. HashSuite verification remains separate. Unit tests mock the Hub API; they do not establish live authentication, HTTP resume, Xet transfer, or remote-cache behavior.
 
 ## LFS cache inventory
 
