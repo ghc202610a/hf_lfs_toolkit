@@ -146,6 +146,10 @@ class LfsPullTests(unittest.TestCase):
             lfspull.path_status(self.root, self.entry["path"], expected_size),
             ("POINTER", None),
         )
+        self.assertEqual(
+            lfspull.path_status(self.root, self.entry["path"], len(self.payload)),
+            ("POINTER", None),
+        )
 
     def test_inventory_rejects_duplicate_and_unsafe_paths(self):
         duplicate = [self.entry, dict(self.entry)]
