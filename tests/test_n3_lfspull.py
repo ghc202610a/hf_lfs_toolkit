@@ -129,17 +129,21 @@ class LfsPullTests(unittest.TestCase):
         self.assertIn("FAILED:", err)
 
     def test_pointer_is_not_skipped_even_when_its_size_matches_inventory(self):
-        pointer = (
-            "version https://git-lfs.github.com/spec/v1\n"
-            "oid sha256:" + "a" * 64 + "\n"
-            "size " + str(len(self.payload)) + "\n"
-        ).encode("ascii")
-        self.entry["size"] = len(pointer)
+        expected_size = 0
+        for _ in range(5):
+            pointer = (
+                "version https://git-lfs.github.com/spec/v1\\n"
+                "oid sha256:" + "a" * 64 + "\\n"
+                "size " + str(expected_size) + "\\n"
+            ).encode("ascii")
+            expected_size = len(pointer)
+        self.assertEqual(len(pointer), expected_size)
+        self.entry["size"] = expected_size
         self.write_inventory([self.entry])
         target = self.root / self.entry["path"]
         target.write_bytes(pointer)
         self.assertEqual(
-            lfspull.path_status(self.root, self.entry["path"], len(pointer)),
+            lfspull.path_status(self.root, self.entry["path"], expected_size),
             ("POINTER", None),
         )
 
