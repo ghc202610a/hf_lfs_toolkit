@@ -147,23 +147,25 @@ def main():
         inventory_path = Path(args.inventory).expanduser().resolve()
         inventory, entries = load_inventory(inventory_path)
         selected = select_entries(entries, args.paths, args.include)
-        backend = None
-        backend_context = None
+        from lfsbackends import (
+            AcquisitionContext, GitLFSBackend, HuggingFaceHubBackend, hub_diagnostics,
+        )
+        backend_context = AcquisitionContext(
+            root=Path("."),
+            repository=inventory.get("repository", ""),
+            git_commit=inventory.get("git_commit", ""),
+        )
         hub_info = None
         if args.backend == "hf-hub":
-            from lfsbackends import AcquisitionContext, HuggingFaceHubBackend, hub_diagnostics
             cache_dir = args.hf_cache_dir.expanduser().resolve() if args.hf_cache_dir else None
             backend = HuggingFaceHubBackend()
-            backend_context = AcquisitionContext(
-                root=Path("."),
-                repository=inventory.get("repository", ""),
-                git_commit=inventory.get("git_commit", ""),
-                cache_dir=cache_dir,
-                disable_xet=args.disable_xet,
-            )
+            backend_context.cache_dir = cache_dir
+            backend_context.disable_xet = args.disable_xet
             if args.disable_xet:
                 os.environ["HF_HUB_DISABLE_XET"] = "1"
             hub_info = hub_diagnostics(cache_dir)
+        else:
+            backend = GitLFSBackend()
         if not selected:
             print("No inventory paths selected.")
             return 0
@@ -254,23 +256,15 @@ def main():
                                "path": rel, "attempt": attempt,
                                "expected_oid": entry["oid"],
                                "expected_size": entry["size"]})
-                    try:
-                        if args.backend == "hf-hub":
-                            acquired = backend.acquire(entry, backend_context)
-                            exit_code = 0 if acquired.outcome == "SIZE_OK" else 1
-                            out = ""
-                            err = acquired.detail or ""
-                        else:
-                            result = subprocess.run(
-                                ["git", "lfs", "pull", "--include=" + rel, "--exclude="],
-                                cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                            exit_code = result.returncode
-                            out = result.stdout.decode("utf-8", errors="replace")
-                            err = result.stderr.decode("utf-8", errors="replace")
-                    except OSError as exc:
-                        exit_code = 127
+                    acquired = backend.acquire(entry, backend_context)
+                    if args.backend == "hf-hub":
+                        exit_code = 0 if acquired.outcome == "SIZE_OK" else 1
                         out = ""
-                        err = "acquisition process failed ({})".format(type(exc).__name__)
+                        err = acquired.detail or ""
+                    else:
+                        exit_code = acquired.exit_code if acquired.exit_code is not None else 1
+                        out = acquired.stdout
+                        err = acquired.stderr or acquired.detail or ""
                     if out:
                         sys.stdout.write(out)
                         sys.stdout.flush()
