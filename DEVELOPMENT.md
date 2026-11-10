@@ -23,7 +23,7 @@ No third-party Python package is required by the toolkit scripts themselves.
 From the repository root:
 
 ```sh
-python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py lfspull.py
+python3 -m py_compile hf-lfs-snapshot.py verify-lfs.py lfsls.py lfspull.py lfscache.py
 python3 -m unittest discover -s tests -v
 ```
 
