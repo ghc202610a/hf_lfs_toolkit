@@ -45,11 +45,13 @@ class HubRunnerTests(unittest.TestCase):
                 "--log", str(self.log), "--reserve-gib", "0",
                 "--backend", "hf-hub", "--retries", "0", *extra]
         root_result = subprocess.CompletedProcess(["git"], 0, str(self.root) + "\n", "")
-        with mock.patch.dict(sys.modules, {"huggingface_hub": fake}), \\
-             mock.patch.object(lfspull.sys, "argv", argv), \\
-             mock.patch.object(lfspull.subprocess, "run", return_value=root_result), \\
-             mock.patch.object(lfspull.shutil, "disk_usage", return_value=mock.Mock(free=10**12)), \\
-             contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.dict(sys.modules, {"huggingface_hub": fake}))
+            stack.enter_context(mock.patch.object(lfspull.sys, "argv", argv))
+            stack.enter_context(mock.patch.object(lfspull.subprocess, "run", return_value=root_result))
+            stack.enter_context(mock.patch.object(lfspull.shutil, "disk_usage", return_value=mock.Mock(free=10**12)))
+            stack.enter_context(contextlib.redirect_stdout(stdout))
+            stack.enter_context(contextlib.redirect_stderr(stderr))
             code = lfspull.main()
         return code, stdout.getvalue(), stderr.getvalue()
 
