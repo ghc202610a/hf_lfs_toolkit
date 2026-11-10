@@ -60,7 +60,7 @@ Pruning is deliberately conservative: if any selected path fails either checksum
 
 ## Read-only cache inventory
 
-`lfscache.py` discovers the configured Git LFS `LocalMediaDir` through `git lfs env` (or accepts an explicit cache directory) and scans only the canonical SHA-256 object layout under that directory's `objects` subtree. An object is recognized only when its relative path is exactly `aa/bb/<64-character-oid>`. Symlinks are not followed. Non-canonical files are ignored.
+`lfscache.py` discovers the configured Git LFS `LocalMediaDir` through `git lfs env` (or accepts an explicit cache directory) and scans only the canonical SHA-256 object layout under that directory's `objects` subtree. An object is recognized only when its path relative to `LocalMediaDir/objects` is exactly `aa/bb/<remaining-60-hex-characters>`; the first two path components complete the 64-character SHA-256 OID. Symlinks are not followed. Non-canonical files are ignored.
 
 The report correlates cached OIDs with one captured inventory and reports matching objects, missing inventory objects, cached-size mismatches, and objects not referenced by that inventory. The latter category must not be called orphaned: Git LFS media storage may be shared across repositories, worktrees, and snapshots, and a single inventory cannot establish global reachability.
 
