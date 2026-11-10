@@ -63,10 +63,10 @@ def object_oid(relative):
     parts = relative.parts
     if len(parts) != 3:
         return None
-    oid = "".join(parts)
-    if len(parts[0]) != 2 or len(parts[1]) != 2 or not OID_RE.fullmatch(oid):
+    if len(parts[0]) != 2 or len(parts[1]) != 2 or len(parts[2]) != 60:
         return None
-    if oid[:2] != parts[0] or oid[2:4] != parts[1]:
+    oid = "".join(parts)
+    if not OID_RE.fullmatch(oid):
         return None
     return oid
 
@@ -75,10 +75,11 @@ def scan_cache(cache_dir):
     objects = []
     skipped_symlinks = 0
     unreadable = 0
-    if not cache_dir.exists():
+    objects_dir = cache_dir / "objects"
+    if not objects_dir.exists():
         return objects, skipped_symlinks, unreadable
-    if not cache_dir.is_dir():
-        raise ValueError(f"cache path is not a directory: {cache_dir}")
+    if not objects_dir.is_dir():
+        raise ValueError(f"Git LFS objects path is not a directory: {objects_dir}")
 
     def walk(directory, relative):
         nonlocal skipped_symlinks, unreadable
@@ -109,7 +110,7 @@ def scan_cache(cache_dir):
                     "path": str(Path(item.path)),
                     "size": item.stat(follow_symlinks=False).st_size,
                 })
-    walk(cache_dir, Path())
+    walk(objects_dir, Path())
     objects.sort(key=lambda item: item["oid"])
     return objects, skipped_symlinks, unreadable
 
