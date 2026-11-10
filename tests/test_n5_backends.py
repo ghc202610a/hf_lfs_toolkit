@@ -119,6 +119,8 @@ class HubBackendTests(unittest.TestCase):
             "https://huggingface.co/org/model/extra",
             "https://huggingface.co//org/model",
             "https://huggingface.co/org%2Fother/model",
+            "https://huggingface.co/org name/model",
+            "https://huggingface.co/org/model\\other",
             "https://huggingface.co/org/model;params",
             "https://www.huggingface.co/org/model",
             "https://example.com/org/model",
