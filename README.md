@@ -210,6 +210,25 @@ python3 /path/to/hf_lfs_toolkit/lfsls.py \
 
 Pruning affects objects under the Git directory's `lfs/objects` hierarchy. It does not remove the materialized working-tree files or the captured inventory. If any selected file fails, pruning is skipped for the entire selected batch. Use this option only when you intentionally want to discard the verified local LFS cache objects.
 
+## 6. Inspect the local Git LFS cache
+
+Run from inside the Git working tree associated with the captured inventory:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfscache.py --inventory ../lfs-inventory.json
+```
+
+The reporter discovers Git LFS's configured `LocalMediaDir` using `git lfs env` and scans only its `objects` subdirectory. Use `--cache-dir PATH` to override the media directory (the directory containing `objects`). It reports total object count and bytes, objects whose SHA-256 OIDs occur in this inventory, objects not referenced by this inventory, missing inventory OIDs, cached-size mismatches, and skipped symlinks/unreadable entries.
+
+For machine-readable output or per-object detail:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfscache.py --inventory ../lfs-inventory.json --json
+python3 /path/to/hf_lfs_toolkit/lfscache.py --inventory ../lfs-inventory.json --show-objects
+```
+
+This command is strictly read-only. “Not referenced by this inventory” does not mean orphaned: Git LFS media storage can be shared by multiple repositories and snapshots. Do not delete such objects based on one inventory. The scanner traverses only the configured `objects` directory; it does not enter `.git/lfs/incomplete`, and it does not perform cleanup.
+
 ## Inventory format and limitations
 
 The normalized inventory format identifier is `hf-lfs-inventory-v1`. Each entry records a relative path, SHA-256 OID, byte size, OID type, and Git LFS pointer version. The snapshot parser validates JSON structure, duplicate paths, path traversal, OID format, size type, and pointer version.
@@ -226,4 +245,4 @@ Run the toolkit's current regression tests from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-The regression suite includes snapshot/verifier safety tests and local-state classification tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
+The regression suite includes snapshot/verifier safety tests, local-state classification tests, acquisition-runner tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.

@@ -7,7 +7,7 @@ The toolkit is organized around separate stages:
 1. **Snapshot** — clone a repository with Git LFS smudging disabled and capture the Git commit plus LFS metadata.
 2. **Acquisition** — materialize selected LFS paths using Git LFS.
 3. **Verification** — compare materialized bytes with the captured SHA-256 OID and expected size using HashSuite.
-4. **Cache management** — optionally remove local LFS cache objects only after successful verification.
+4. **Cache management** — inspect the local LFS object cache; any optional removal remains a separate, conservative operation.
 
 A successful stage must not be treated as proof that a later stage succeeded. In particular, a completed pull is not equivalent to a verified file.
 
@@ -57,6 +57,14 @@ The expected manifest is built from the complete inventory, while the computed m
 ## Cache pruning
 
 Pruning is deliberately conservative: if any selected path fails either checksum or size/stability validation, no selected cache objects are removed. Only corresponding objects in the Git LFS object cache are eligible. Incomplete-download storage is outside the pruning target.
+
+## Read-only cache inventory
+
+`lfscache.py` discovers the configured Git LFS `LocalMediaDir` through `git lfs env` (or accepts an explicit cache directory) and scans only the canonical SHA-256 object layout under that directory's `objects` subtree. An object is recognized only when its path relative to `LocalMediaDir/objects` is exactly `aa/bb/<remaining-60-hex-characters>`; the first two path components complete the 64-character SHA-256 OID. Symlinks are not followed. Non-canonical files are ignored.
+
+The report correlates cached OIDs with one captured inventory and reports matching objects, missing inventory objects, cached-size mismatches, and objects not referenced by that inventory. The latter category must not be called orphaned: Git LFS media storage may be shared across repositories, worktrees, and snapshots, and a single inventory cannot establish global reachability.
+
+N+4 deliberately adds inspection only. The reporter is read-only, does not enter `.git/lfs/incomplete`, and does not delete, move, rewrite, or repair cache objects. Any future cleanup feature needs a separate design for global reachability, concurrent Git LFS processes, dry-run review, and explicit destructive authorization.
 
 ## Mutable local state
 
