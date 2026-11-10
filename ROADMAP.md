@@ -29,12 +29,14 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Delegate incomplete-transfer and cache handling to Git LFS; never delete `.git/lfs/incomplete`.
 - Keep verification and pruning in their existing separate tools/stages.
 
-## N+4 — LFS cache inspection and cleanup
+## N+4 — LFS cache inspection (in progress)
 
-- Inventory the local LFS cache before proposing cleanup.
-- Preserve `.git/lfs/incomplete` by default.
-- If stale temporary-file cleanup is added, require conservative age/process checks, dry-run support, and clear reporting.
-- Consider filesystem-specific optimizations only as optional features.
+- Add a read-only `lfscache.py` report of the configured Git LFS object cache.
+- Correlate canonical SHA-256 cache object paths with a captured inventory.
+- Report cache totals, inventory-referenced objects, objects not referenced by this inventory, missing inventory OIDs, size mismatches, and skipped symlinks.
+- Explicitly avoid calling objects absent from one inventory “orphans”; the media cache may be shared by other repositories or snapshots.
+- Do not inspect or modify `.git/lfs/incomplete`.
+- Defer deletion/cleanup until global reachability and concurrent-process safety can be established.
 
 ## N+5 — Alternative acquisition backend evaluation
 
