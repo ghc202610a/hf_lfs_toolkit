@@ -11,6 +11,7 @@ The snapshot records the Git commit and preserves both the raw `git lfs ls-files
 - Git LFS (`git-lfs`) with support for `git lfs ls-files --json`
 - Network access and any required credentials for the Hugging Face repository
 - HashSuite `hashcheck.py` for verification (not required just to capture a snapshot)
+- Optional: `huggingface_hub` for the `hf-hub` acquisition backend
 
 The default Git LFS workflow uses only the Python standard library. The optional `hf-hub` backend requires a separately installed, current `huggingface_hub` package; this toolkit does not install dependencies automatically. HashSuite is a separate dependency and must be obtained and maintained separately.
 
@@ -265,4 +266,4 @@ Run the toolkit's current regression tests from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-The regression suite includes snapshot/verifier safety tests, local-state classification tests, acquisition-runner tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
+The regression suite includes snapshot/verifier safety tests, local-state classification tests, Git LFS and Hub acquisition-runner tests, mocked Hub backend tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
