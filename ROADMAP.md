@@ -29,7 +29,7 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Delegate incomplete-transfer and cache handling to Git LFS; never delete `.git/lfs/incomplete`.
 - Keep verification and pruning in their existing separate tools/stages.
 
-## N+4 — LFS cache inspection (in progress)
+## N+4 — LFS cache inspection (complete)
 
 - Add a read-only `lfscache.py` report of the configured Git LFS object cache.
 - Correlate canonical SHA-256 cache object paths with a captured inventory.
