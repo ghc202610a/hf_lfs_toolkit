@@ -276,13 +276,15 @@ def main():
                     emit(log, {"event": "attempt-finish", "at_utc": now(),
                                "path": rel, "attempt": attempt,
                                "exit_code": exit_code, "backend": args.backend,
+                               "observed_bytes": acquired.observed_bytes,
                                "observed_status": status, "detail": detail,
                                "stdout": out[-12000:], "stderr": err[-12000:]})
                     if ok:
                         completed = True
                         successes += 1
                         emit(log, {"event": "path-complete", "at_utc": now(),
-                                   "path": rel, "status": "SIZE_OK",
+                                   "path": rel, "status": "SIZE_OK", "backend": args.backend,
+                                   "observed_bytes": acquired.observed_bytes,
                                    "expected_size": entry["size"]})
                         print("SIZE_OK: {}".format(rel))
                         break
