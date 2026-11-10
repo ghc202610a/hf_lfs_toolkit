@@ -130,9 +130,9 @@ class LfsPullTests(unittest.TestCase):
 
     def test_pointer_is_not_skipped_even_when_its_size_matches_inventory(self):
         pointer = (
-            "version https://git-lfs.github.com/spec/v1\\n"
-            "oid sha256:" + "a" * 64 + "\\n"
-            "size " + str(len(self.payload)) + "\\n"
+            "version https://git-lfs.github.com/spec/v1\n"
+            "oid sha256:" + "a" * 64 + "\n"
+            "size " + str(len(self.payload)) + "\n"
         ).encode("ascii")
         self.entry["size"] = len(pointer)
         self.write_inventory([self.entry])
