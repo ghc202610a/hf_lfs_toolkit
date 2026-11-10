@@ -74,13 +74,36 @@ class HuggingFaceHubBackend(AcquisitionBackend):
 
     @staticmethod
     def repository_id(repository: str) -> str:
-        parsed = urlparse(repository)
-        if parsed.scheme not in ("https", "http") or parsed.hostname not in (
-            "huggingface.co", "www.huggingface.co"
-        ):
+        """Accept only an unambiguous public HTTPS model-repository URL."""
+        if not isinstance(repository, str):
             raise ValueError("Hub backend requires a huggingface.co model repository URL")
-        parts = [part for part in parsed.path.split("/") if part]
-        if len(parts) != 2 or any(part in (".", "..") for part in parts):
+        try:
+            parsed = urlparse(repository)
+            hostname = parsed.hostname
+            # Accessing .port validates malformed port syntax as well.
+            port = parsed.port
+        except ValueError:
+            raise ValueError("Hub backend requires a canonical HTTPS model repository URL") from None
+
+        if (
+            parsed.scheme != "https"
+            or hostname not in ("huggingface.co", "www.huggingface.co")
+            or parsed.username is not None
+            or parsed.password is not None
+            or port is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.params
+        ):
+            raise ValueError("Hub backend requires a canonical HTTPS huggingface.co model URL")
+
+        # Encoded separators and repeated/extra path components make URL-to-repo
+        # interpretation ambiguous. The Hub API receives a plain ORG/MODEL ID.
+        match = re.fullmatch(r"/([^/%?#;]+)/([^/%?#;]+)/?", parsed.path)
+        if not match:
+            raise ValueError("Hub backend supports model repository URLs in ORG/MODEL form")
+        parts = match.groups()
+        if any(part in (".", "..") for part in parts):
             raise ValueError("Hub backend supports model repository URLs in ORG/MODEL form")
         return "/".join(parts)
 
