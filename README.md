@@ -218,7 +218,7 @@ Run from inside the Git working tree associated with the captured inventory:
 python3 /path/to/hf_lfs_toolkit/lfscache.py --inventory ../lfs-inventory.json
 ```
 
-The reporter discovers Git LFS's configured `LocalMediaDir` using `git lfs env` and scans only its `objects` directory. Use `--cache-dir PATH` to inspect a specific object directory. It reports total object count and bytes, objects whose SHA-256 OIDs occur in this inventory, objects not referenced by this inventory, missing inventory OIDs, cached-size mismatches, and skipped symlinks/unreadable entries.
+The reporter discovers Git LFS's configured `LocalMediaDir` using `git lfs env` and scans only its `objects` subdirectory. Use `--cache-dir PATH` to override the media directory (the directory containing `objects`). It reports total object count and bytes, objects whose SHA-256 OIDs occur in this inventory, objects not referenced by this inventory, missing inventory OIDs, cached-size mismatches, and skipped symlinks/unreadable entries.
 
 For machine-readable output or per-object detail:
 
