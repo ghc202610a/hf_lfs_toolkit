@@ -2,7 +2,7 @@
 
 This is a planning document. Items below are proposed follow-on work, not statements about functionality currently present in `main`.
 
-## Current baseline (N+4)
+## Current baseline (N+5)
 
 - Capture pointer-only Hugging Face Git working tree.
 - Preserve raw Git LFS JSON and a normalized `hf-lfs-inventory-v1` inventory.
@@ -38,7 +38,7 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Do not inspect or modify `.git/lfs/incomplete`.
 - Defer deletion/cleanup until global reachability and concurrent-process safety can be established.
 
-## N+5 — Alternative acquisition backends (implementation in progress)
+## N+5 — Alternative acquisition backends (complete)
 
 - Keep Git LFS as the default acquisition backend and compatibility baseline.
 - Add a backend interface and an optional official Hugging Face Hub API backend.
