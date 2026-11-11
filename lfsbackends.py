@@ -88,6 +88,7 @@ class HuggingFaceHubBackend(AcquisitionBackend):
         if (
             parsed.scheme != "https"
             or hostname != "huggingface.co"
+            or parsed.netloc != "huggingface.co"
             or parsed.username is not None
             or parsed.password is not None
             or port is not None
