@@ -29,6 +29,7 @@ class HubRunnerTests(unittest.TestCase):
         self.cache_file = self.base / "cached.bin"
         self.payload = b"hub-materialized-data"
         self.cache_file.write_bytes(self.payload)
+        self.hub_calls = []
         self.entry = {"path": "weights/model.bin", "oid": "a" * 64, "size": len(self.payload)}
         self.inventory.write_text(json.dumps({
             "format": "hf-lfs-inventory-v1",
@@ -39,7 +40,10 @@ class HubRunnerTests(unittest.TestCase):
 
     def run_main(self, *extra):
         fake = types.ModuleType("huggingface_hub")
-        fake.hf_hub_download = lambda **kwargs: str(self.cache_file)
+        def fake_download(**kwargs):
+            self.hub_calls.append(kwargs)
+            return str(self.cache_file)
+        fake.hf_hub_download = fake_download
         stdout, stderr = io.StringIO(), io.StringIO()
         argv = ["lfspull.py", "--inventory", str(self.inventory),
                 "--log", str(self.log), "--reserve-gib", "0",
@@ -62,6 +66,27 @@ class HubRunnerTests(unittest.TestCase):
         events = [json.loads(line) for line in self.log.read_text().splitlines()]
         self.assertEqual(events[0]["backend"], "hf-hub")
         self.assertEqual(events[-1]["failures"], 0)
+
+
+    def test_repository_credentials_are_not_logged_or_forwarded(self):
+        credential = "secret-token-should-not-appear"
+        inventory = json.loads(self.inventory.read_text(encoding="utf-8"))
+        inventory["repository"] = (
+            "https://user:{}@huggingface.co/org/model".format(credential)
+        )
+        self.inventory.write_text(json.dumps(inventory), encoding="utf-8")
+
+        code, out, err = self.run_main()
+        self.assertEqual(code, 1, (out, err))
+        self.assertEqual(self.hub_calls, [])
+        combined = out + err + self.log.read_text(encoding="utf-8")
+        self.assertNotIn(credential, combined)
+        self.assertNotIn("user:", combined)
+        events = [
+            json.loads(line)
+            for line in self.log.read_text(encoding="utf-8").splitlines()
+        ]
+        self.assertNotIn("repository", events[0])
 
     def test_partial_materialized_target_requires_replace(self):
         target = self.root / self.entry["path"]
