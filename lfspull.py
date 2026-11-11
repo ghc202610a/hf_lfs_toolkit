@@ -124,7 +124,15 @@ def main():
     parser.add_argument("--no-space-check", action="store_true",
                         help="skip the worktree free-space preflight")
     parser.add_argument("--force", action="store_true",
-                        help="run git lfs pull even when the path already has expected size")
+                        help="run acquisition even when the path already has expected size")
+    parser.add_argument("--backend", choices=("git-lfs", "hf-hub"), default="git-lfs",
+                        help="acquisition backend (default: git-lfs)")
+    parser.add_argument("--hf-cache-dir", type=Path,
+                        help="Hugging Face Hub cache directory (hf-hub backend only)")
+    parser.add_argument("--disable-xet", action="store_true",
+                        help="disable hf_xet for this process (hf-hub backend only)")
+    parser.add_argument("--replace", action="store_true",
+                        help="authorize replacing an existing regular materialized file (hf-hub backend only)")
     parser.add_argument("--log", help="JSON Lines run log (default: local.lfspull.TIMESTAMP.jsonl)")
     args = parser.parse_args()
 
@@ -132,11 +140,32 @@ def main():
         parser.error("--retries must be nonnegative and --retry-delay finite and nonnegative")
     if args.reserve_gib < 0 or not math.isfinite(args.reserve_gib):
         parser.error("--reserve-gib must be finite and nonnegative")
+    if args.backend != "hf-hub" and (args.replace or args.hf_cache_dir or args.disable_xet):
+        parser.error("--replace, --hf-cache-dir, and --disable-xet require --backend hf-hub")
 
     try:
         inventory_path = Path(args.inventory).expanduser().resolve()
         inventory, entries = load_inventory(inventory_path)
         selected = select_entries(entries, args.paths, args.include)
+        from lfsbackends import (
+            AcquisitionContext, GitLFSBackend, HuggingFaceHubBackend, hub_diagnostics,
+        )
+        backend_context = AcquisitionContext(
+            root=Path("."),
+            repository=inventory.get("repository", ""),
+            git_commit=inventory.get("git_commit", ""),
+        )
+        hub_info = None
+        if args.backend == "hf-hub":
+            cache_dir = args.hf_cache_dir.expanduser().resolve() if args.hf_cache_dir else None
+            backend = HuggingFaceHubBackend()
+            backend_context.cache_dir = cache_dir
+            backend_context.disable_xet = args.disable_xet
+            if args.disable_xet:
+                os.environ["HF_HUB_DISABLE_XET"] = "1"
+            hub_info = hub_diagnostics(cache_dir)
+        else:
+            backend = GitLFSBackend()
         if not selected:
             print("No inventory paths selected.")
             return 0
@@ -146,6 +175,8 @@ def main():
         ).stdout.strip()).resolve()
         if not root.is_dir():
             raise ValueError("Git worktree root is not a directory")
+        if backend_context is not None:
+            backend_context.root = root
 
         work = []
         skipped = []
@@ -154,10 +185,21 @@ def main():
             status, detail = path_status(root, entry["path"], entry["size"])
             if status == "SIZE_OK" and not args.force:
                 skipped.append((entry, status))
+            elif status in ("PARTIAL", "MISMATCH") and args.backend == "hf-hub":
+                if not args.replace:
+                    raise ValueError("{}: existing non-pointer file has a different size; use --replace to authorize replacement".format(entry["path"]))
+                target = root.joinpath(*PurePosixPath(entry["path"]).parts)
+                if not target.is_file() or target.is_symlink():
+                    raise ValueError("{}: replacement target is not a regular non-symlink file".format(entry["path"]))
+                work.append(entry)
+                required += entry["size"]
             elif status in ("UNKNOWN", "MISMATCH"):
                 raise ValueError("{}: {}{}".format(
                     entry["path"], status, ": " + detail if detail else ""))
             else:
+                if (args.backend == "hf-hub" and args.force and status == "SIZE_OK"
+                        and not args.replace):
+                    raise ValueError("{}: --force would replace an existing materialized file; use --replace explicitly".format(entry["path"]))
                 work.append(entry)
                 required += entry["size"]
 
@@ -194,9 +236,10 @@ def main():
         failures = 0
         with log_path.open("a", encoding="utf-8") as log:
             emit(log, {"event": "run-start", "at_utc": now(),
-                       "inventory": str(inventory_path), "repository": inventory.get("repository"),
+                       "inventory": str(inventory_path),
                        "selected": len(selected), "scheduled": len(work),
-                       "estimated_bytes": required, "reserve_bytes": reserve})
+                       "estimated_bytes": required, "reserve_bytes": reserve,
+                       "backend": args.backend, "hub": hub_info})
             for entry, status in skipped:
                 print("SKIP SIZE_OK: {}".format(entry["path"]))
                 emit(log, {"event": "path-skipped", "at_utc": now(),
@@ -213,35 +256,35 @@ def main():
                                "path": rel, "attempt": attempt,
                                "expected_oid": entry["oid"],
                                "expected_size": entry["size"]})
-                    try:
-                        result = subprocess.run(
-                            ["git", "lfs", "pull", "--include=" + rel, "--exclude="],
-                            cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                        out = result.stdout.decode("utf-8", errors="replace")
-                        err = result.stderr.decode("utf-8", errors="replace")
-                    except OSError as exc:
-                        result = subprocess.CompletedProcess(
-                            ["git", "lfs", "pull"], 127, b"", str(exc).encode("utf-8"))
+                    acquired = backend.acquire(entry, backend_context)
+                    if args.backend == "hf-hub":
+                        exit_code = 0 if acquired.outcome == "SIZE_OK" else 1
                         out = ""
-                        err = str(exc)
+                        err = acquired.detail or ""
+                    else:
+                        exit_code = acquired.exit_code if acquired.exit_code is not None else 1
+                        out = acquired.stdout
+                        err = acquired.stderr or acquired.detail or ""
                     if out:
                         sys.stdout.write(out)
                         sys.stdout.flush()
                     if err:
-                        sys.stderr.write(err)
+                        sys.stderr.write(err + ("\n" if not err.endswith("\n") else ""))
                         sys.stderr.flush()
                     status, detail = path_status(root, rel, entry["size"])
-                    ok = result.returncode == 0 and status == "SIZE_OK"
+                    ok = exit_code == 0 and status == "SIZE_OK"
                     emit(log, {"event": "attempt-finish", "at_utc": now(),
                                "path": rel, "attempt": attempt,
-                               "exit_code": result.returncode,
+                               "exit_code": exit_code, "backend": args.backend,
+                               "observed_bytes": acquired.observed_bytes,
                                "observed_status": status, "detail": detail,
                                "stdout": out[-12000:], "stderr": err[-12000:]})
                     if ok:
                         completed = True
                         successes += 1
                         emit(log, {"event": "path-complete", "at_utc": now(),
-                                   "path": rel, "status": "SIZE_OK",
+                                   "path": rel, "status": "SIZE_OK", "backend": args.backend,
+                                   "observed_bytes": acquired.observed_bytes,
                                    "expected_size": entry["size"]})
                         print("SIZE_OK: {}".format(rel))
                         break

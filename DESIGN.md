@@ -5,7 +5,7 @@
 The toolkit is organized around separate stages:
 
 1. **Snapshot** — clone a repository with Git LFS smudging disabled and capture the Git commit plus LFS metadata.
-2. **Acquisition** — materialize selected LFS paths using Git LFS.
+2. **Acquisition** — materialize selected LFS paths using Git LFS by default or the optional Hugging Face Hub API backend.
 3. **Verification** — compare materialized bytes with the captured SHA-256 OID and expected size using HashSuite.
 4. **Cache management** — inspect the local LFS object cache; any optional removal remains a separate, conservative operation.
 
@@ -42,6 +42,18 @@ The raw capture is retained so that normalization does not destroy source detail
 A disk-space preflight estimates the bytes required by selected paths not already at expected size, plus a configurable reserve. It checks the worktree filesystem only; it does not inspect a separately configured Git LFS media directory. It is not a reservation or guarantee: other processes can consume space after the check. Retry handling is bounded and uses exponential backoff. Every run appends JSON Lines events and flushes each record so an interrupted run leaves diagnostic evidence.
 
 The runner delegates transfer and incomplete-object handling to Git LFS. It never removes or edits `.git/lfs/incomplete`, never prunes cache objects, and does not equate successful transfer or expected-size equality with checksum verification. Re-running the command is the recovery path; Git LFS remains responsible for its own cache and transfer-resume behavior.
+
+## Acquisition backend boundary
+
+`lfspull.py` owns inventory selection, worktree path checks, free-space preflight, retry scheduling, and JSON Lines run logging. The selected backend is responsible for acquiring one inventory entry. Git LFS remains the default and retains the existing one-path `git lfs pull --include=PATH --exclude=` behavior. The optional `hf-hub` backend uses `huggingface_hub.hf_hub_download` and is imported only when selected, so the default workflow has no third-party Python dependency.
+
+The Hub backend accepts the current model URL form and requires a full captured commit ID. It passes that exact revision and the inventory path to the Hub API; it does not resolve a branch or use a current default revision. Authentication and transport are delegated to the Hub library. No credentials, authorization headers, raw exception text, or signed download URLs are written to the run log.
+
+Hub cache results may be symlinks to shared blobs, so the backend reads the returned cache path without modifying it. It checks the cached file's byte size, copies it into a temporary sibling of the worktree destination, checks the staged size, and atomically replaces the destination. This preserves the Hub cache and ensures the final replacement is on the target filesystem. The runner rejects symlinked/non-regular worktree paths before invoking a backend. For Hub acquisition, `--replace` explicitly authorizes replacing an existing regular partial or wrong-size file; `--force` alone does not authorize replacing an existing materialized file.
+
+The Hub file cache is separate from Git LFS `LocalMediaDir`. The library may use Xet automatically when `hf_xet` is available and enabled. HTTP-mode incomplete-file resume and Xet transfer behavior are delegated to the installed library; the toolkit does not promise identical cross-run resume semantics for both. The Xet shard/staging cache is not treated as a download-resume cache. Neither Hub cache is scanned or pruned by this toolkit.
+
+Backend completion is still only an acquisition observation. A `SIZE_OK` result does not establish the captured SHA-256 OID; HashSuite remains the sole digest engine and verification remains a separate stage. No automatic fallback between backends is performed.
 
 ## Verification evidence
 

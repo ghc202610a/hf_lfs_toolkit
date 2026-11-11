@@ -2,7 +2,7 @@
 
 This is a planning document. Items below are proposed follow-on work, not statements about functionality currently present in `main`.
 
-## Current baseline (N+1)
+## Current baseline (N+5)
 
 - Capture pointer-only Hugging Face Git working tree.
 - Preserve raw Git LFS JSON and a normalized `hf-lfs-inventory-v1` inventory.
@@ -29,7 +29,7 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Delegate incomplete-transfer and cache handling to Git LFS; never delete `.git/lfs/incomplete`.
 - Keep verification and pruning in their existing separate tools/stages.
 
-## N+4 — LFS cache inspection (in progress)
+## N+4 — LFS cache inspection (complete)
 
 - Add a read-only `lfscache.py` report of the configured Git LFS object cache.
 - Correlate canonical SHA-256 cache object paths with a captured inventory.
@@ -38,11 +38,17 @@ This is a planning document. Items below are proposed follow-on work, not statem
 - Do not inspect or modify `.git/lfs/incomplete`.
 - Defer deletion/cleanup until global reachability and concurrent-process safety can be established.
 
-## N+5 — Alternative acquisition backend evaluation
+## N+5 — Alternative acquisition backends (complete)
 
-- Evaluate direct-download and resumable-transfer backends, including authentication behavior and compatibility with the target hosting service.
-- Compare tools such as aria2 only where they provide a measurable benefit.
-- Keep acquisition backends behind a clear interface; retain Git LFS as a supported baseline.
+- Keep Git LFS as the default acquisition backend and compatibility baseline.
+- Add a backend interface and an optional official Hugging Face Hub API backend.
+- Resolve every Hub download against the exact captured commit; do not fall back to a moving revision.
+- Delegate Hub authentication, HTTP/Xet transport, retry internals, and cache handling to the official library.
+- Install validated-size Hub cache files through a temporary worktree sibling and atomic replacement; preserve Hub cache objects.
+- Keep `--force` distinct from explicit replacement authorization.
+- Record backend and non-secret cache/Xet diagnostics in JSONL logs.
+- Keep SHA-256 verification in HashSuite; acquisition success and size equality are not verification.
+- Defer aria2, parallel acquisition, cache cleanup, and dataset/Space URL support.
 
 ## N+6 — Snapshot comparison and incremental plans
 

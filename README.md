@@ -11,8 +11,9 @@ The snapshot records the Git commit and preserves both the raw `git lfs ls-files
 - Git LFS (`git-lfs`) with support for `git lfs ls-files --json`
 - Network access and any required credentials for the Hugging Face repository
 - HashSuite `hashcheck.py` for verification (not required just to capture a snapshot)
+- Optional: `huggingface_hub` for the `hf-hub` acquisition backend
 
-The Python tools use only the Python standard library. HashSuite is a separate dependency and must be obtained and maintained separately.
+The default Git LFS workflow uses only the Python standard library. The optional `hf-hub` backend requires a separately installed, current `huggingface_hub` package; this toolkit does not install dependencies automatically. HashSuite is a separate dependency and must be obtained and maintained separately.
 
 ## 1. Capture a pointer-only snapshot
 
@@ -76,6 +77,26 @@ python3 /path/to/hf_lfs_toolkit/lfspull.py \
 The runner processes selected paths serially and invokes `git lfs pull` separately for each path. It retries failed pulls with exponential backoff, checks available space before starting, and writes JSON Lines events to `local.lfspull.TIMESTAMP.jsonl` (or the path supplied with `--log`). A rerun is safe: Git LFS manages its own local object and incomplete-transfer data, which this tool does not delete or rewrite. Exact-size working-tree files are skipped by default; this is an acquisition shortcut, not cryptographic verification. Use `--force` to invoke Git LFS for those paths too.
 
 The preflight estimates required space as the sum of expected sizes for paths that are not already exact-size files, plus a default 1 GiB reserve. It checks the worktree filesystem only; it does not inspect a separately configured Git LFS media directory, and it is not a reservation or guarantee. Adjust the reserve with `--reserve-gib`, or explicitly disable the check with `--no-space-check`. Select exact paths or repeatable globs with positional paths and `--include`. A nonzero exit status means at least one selected path did not complete with the expected size; inspect the run log and rerun the failed paths as needed. A `SIZE_OK` result does not establish SHA-256 integrity; use `verify-lfs.py` or `lfsls.py --verify` for that.
+
+### Optional Hugging Face Hub backend
+
+The Python runner can use the official Hub download API instead of Git LFS:
+
+```sh
+python3 /path/to/hf_lfs_toolkit/lfspull.py \\
+  --inventory ../lfs-inventory.json \\
+  --backend hf-hub --retries 3 --retry-delay 5
+```
+
+This backend is optional and requires `huggingface_hub`. It supports captured model-repository URLs in `https://huggingface.co/ORG/MODEL` form. It uses the inventory's exact `git_commit` as the Hub revision and does not fall back to a branch, tag, or current default revision. Authentication is delegated to the Hub library's supported login/token mechanisms; do not put tokens on the command line.
+
+The Hub library manages its own cache and chooses its supported transfer path. When `hf_xet` is installed and Xet is enabled for the repository, the library may use Xet automatically. Use `--disable-xet` for a controlled non-Xet comparison, or set `HF_HUB_DISABLE_XET=1` in the environment. `--hf-cache-dir PATH` selects the Hub file-cache directory (the same cache can also be configured with `HF_HUB_CACHE` or `HF_HOME`). `HF_XET_CACHE` selects the separate Xet cache location; it is not the Hub file cache and is reported for diagnostics, not managed by this toolkit. The run log records the selected backend, Hub cache path, Xet-cache path, and whether `hf_xet` appears available; it does not record credentials, authorization headers, or signed download URLs.
+
+The Hub file cache is distinct from the Git LFS media cache reported by `lfscache.py`. The Hub library may retain completed blobs and incomplete HTTP downloads in its own cache. HTTP-mode incomplete downloads use the library's resume behavior when the same cache entry is reused. Xet manages its own transfer and staging path; do not assume that its upload-oriented shard/staging cache provides persistent cross-run resume for interrupted downloads. Current `hf_xet` downloads do not use the former local chunk cache. This toolkit does not inspect, prune, or relocate either Hub cache. Use the Hugging Face CLI's cache commands and current Hub documentation for cache maintenance.
+
+The backend downloads at the captured revision into the Hub-managed cache, checks the returned file's byte size, copies it to a temporary sibling of the worktree target, then atomically replaces the target. The Hub cache object is left intact. Existing exact-size files are skipped unless `--force` is supplied. For the Hub backend, `--force` does not authorize overwriting an existing materialized file: use `--replace` as well. `--replace` also authorizes replacing an existing partial or wrong-size regular file. Symlinks and non-regular targets remain rejected. `--replace` is only supported with `--backend hf-hub`.
+
+A successful Hub acquisition is reported as `SIZE_OK`, not `VERIFIED`. The runner does not implement another digest engine and does not independently calculate the LFS OID. Run `verify-lfs.py` or `lfsls.py --verify` to verify SHA-256 through HashSuite. The Git LFS backend remains the default, and no automatic fallback occurs between backends.
 
 The generated `_clone.sh` can recreate the pointer-only checkout at the captured commit:
 
@@ -245,4 +266,4 @@ Run the toolkit's current regression tests from the repository root:
 python3 -m unittest discover -s tests -v
 ```
 
-The regression suite includes snapshot/verifier safety tests, local-state classification tests, acquisition-runner tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
+The regression suite includes snapshot/verifier safety tests, local-state classification tests, Git LFS and Hub acquisition-runner tests, mocked Hub backend tests, and read-only cache-inventory tests. These deterministic tests do not constitute live Hugging Face cloning, Git LFS transfer, or real HashSuite integration coverage. See [DEVELOPMENT.md](DEVELOPMENT.md) for the exact current test scope.
