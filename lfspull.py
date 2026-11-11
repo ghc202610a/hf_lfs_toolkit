@@ -236,7 +236,7 @@ def main():
         failures = 0
         with log_path.open("a", encoding="utf-8") as log:
             emit(log, {"event": "run-start", "at_utc": now(),
-                       "inventory": str(inventory_path), "repository": inventory.get("repository"),
+                       "inventory": str(inventory_path),
                        "selected": len(selected), "scheduled": len(work),
                        "estimated_bytes": required, "reserve_bytes": reserve,
                        "backend": args.backend, "hub": hub_info})
